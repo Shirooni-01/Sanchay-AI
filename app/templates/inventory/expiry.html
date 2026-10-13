@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Expiry &amp; Near-Expiry Alerts — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Expiry &amp; Near-Expiry Alerts — {{ shop.name }} ({{ shop.code }})</h1>
+        <p class="page-subtitle">
+            Business Date: <strong>{{ alerts.business_date }}</strong> ({{ alerts.timezone }}) &bull;
+            Deterministic FEFO expiry classification and quarantined expired stock.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">&larr; Inventory Overview</a>
+        <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">All Batches (FEFO)</a>
+    </div>
+</div>
+
+<div class="subnav-tabs mb-4">
+    <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="subnav-tab">Overview</a>
+    <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="subnav-tab">Product Catalog</a>
+    <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="subnav-tab">Batches (FEFO)</a>
+    <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="subnav-tab">Receive Stock</a>
+    {% if can_adjust_stock %}
+    <a href="{{ url_for('inventory.adjust_stock_page', shop_id=shop.id) }}" class="subnav-tab">Adjust Stock</a>
+    {% endif %}
+    <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Low Stock Alerts</a>
+    <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="subnav-tab active">Expiry Alerts</a>
+    <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="subnav-tab">Stock Ledger</a>
+</div>
+
+<section class="card mb-4">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Near-Expiry Active Batches ({{ alerts.near_expiry_batches|length }} batches)</h2>
+        <span class="badge-warning">0 &lt; Days Until Expiry &le; Product Threshold</span>
+    </div>
+    <div class="card-body">
+        {% if alerts.near_expiry_batches %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Batch Code</th>
+                        <th>SKU / Product</th>
+                        <th>Category</th>
+                        <th>Expiry Date</th>
+                        <th>Days Remaining</th>
+                        <th>Warning Window</th>
+                        <th>Sellable Qty</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for nb in alerts.near_expiry_batches %}
+                    <tr>
+                        <td><code>{{ nb.batch_code }}</code></td>
+                        <td>
+                            <strong>{{ nb.product_name }}</strong>
+                            <div class="text-muted text-xs"><code>{{ nb.product_sku }}</code></div>
+                        </td>
+                        <td>{{ nb.category }}</td>
+                        <td><strong>{{ nb.expiry_date }}</strong></td>
+                        <td><span class="badge-warning">{{ nb.days_until_expiry }} days</span></td>
+                        <td>&le; {{ nb.near_expiry_threshold_days }} days</td>
+                        <td><strong>{{ nb.available_qty }}</strong> {{ nb.unit }}</td>
+                        <td>
+                            <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=nb.batch_id) }}" class="btn btn-secondary btn-sm">Inspect Batch</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No active batches are currently within their near-expiry warning window.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Quarantined Expired Batches ({{ alerts.expired_batches|length }} batches)</h2>
+        <span class="badge-danger">Excluded from Sellable Stock</span>
+    </div>
+    <div class="card-body">
+        {% if alerts.expired_batches %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Batch Code</th>
+                        <th>SKU / Product</th>
+                        <th>Category</th>
+                        <th>Expiry Date</th>
+                        <th>Days Since Expiry</th>
+                        <th>Quarantined Expired Qty</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for eb in alerts.expired_batches %}
+                    <tr>
+                        <td><code>{{ eb.batch_code }}</code></td>
+                        <td>
+                            <strong>{{ eb.product_name }}</strong>
+                            <div class="text-muted text-xs"><code>{{ eb.product_sku }}</code></div>
+                        </td>
+                        <td>{{ eb.category }}</td>
+                        <td><strong>{{ eb.expiry_date }}</strong></td>
+                        <td>{{ eb.days_until_expiry }} days</td>
+                        <td><strong>{{ eb.expired_qty }}</strong> {{ eb.unit }}</td>
+                        <td><span class="badge-danger">EXPIRED</span></td>
+                        <td>
+                            <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=eb.batch_id) }}" class="btn btn-secondary btn-sm">Batch Ledger</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No expired batches found in {{ shop.name }}.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

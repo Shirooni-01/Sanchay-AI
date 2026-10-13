@@ -1,0 +1,67 @@
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ page_heading }} &mdash; {{ shop.name }} (<code>{{ shop.code }}</code>)</h1>
+        <p class="page-subtitle">
+            Deterministic Rule-Based Stock Analysis &bull;
+            Rule Version: <code>{{ analysis.rule_version }}</code> &bull;
+            Business Date: <strong>{{ analysis.business_date }}</strong> &bull;
+            Lookback Window: <strong>{{ analysis.configuration.lookback_days }}d</strong> ({{ analysis.configuration.window_start_date }} to {{ analysis.configuration.window_end_date }}) &bull;
+            Safety Stock: <strong>{{ analysis.configuration.safety_stock_days }}d</strong>{% if analysis.configuration.safety_stock_qty_override is not none %} (Override: {{ analysis.configuration.safety_stock_qty_override }} units){% endif %}
+        </p>
+    </div>
+    <div class="header-actions" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        {% if accessible_shops | length > 1 %}
+        <form method="GET" action="" class="inline-form" onsubmit="event.preventDefault(); window.location.href = this.querySelector('select').value;">
+            <select aria-label="Switch shop" class="form-control" style="padding: 0.35rem 0.65rem; font-size: 0.875rem;" onchange="window.location.href=this.value">
+                {% for s in accessible_shops %}
+                <option value="{{ url_for(request.endpoint, shop_id=s.id, **query_params) if request.endpoint in ('analysis.overview_page', 'analysis.expiry_risk_page', 'analysis.surplus_page', 'analysis.low_stock_page', 'analysis.recommendations_page') else url_for('analysis.overview_page', shop_id=s.id) }}" {% if s.id == shop.id %}selected{% endif %}>
+                    {{ s.code }} &mdash; {{ s.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Shop Inventory</a>
+        <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">POS Counter</a>
+        <a href="{{ url_for('analysis.overview_page', shop_id=shop.id, refresh=1, **query_params) }}" class="btn btn-primary btn-sm">Recalculate Now</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1.25rem; padding: 0.85rem 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+        <div class="action-btn-group" role="navigation" aria-label="Stock Analysis views">
+            <a href="{{ url_for('analysis.overview_page', shop_id=shop.id, **query_params) }}"
+               class="btn {% if active_tab == 'overview' %}btn-primary{% else %}btn-outline{% endif %} btn-sm">
+                Risk Overview
+            </a>
+            <a href="{{ url_for('analysis.expiry_risk_page', shop_id=shop.id, **query_params) }}"
+               class="btn {% if active_tab == 'expiry_risk' %}btn-primary{% else %}btn-outline{% endif %} btn-sm">
+                Expiry Risk ({{ analysis.kpis.near_expiry_batches_count + analysis.kpis.expired_batches_count }})
+            </a>
+            <a href="{{ url_for('analysis.surplus_page', shop_id=shop.id, **query_params) }}"
+               class="btn {% if active_tab == 'surplus' %}btn-primary{% else %}btn-outline{% endif %} btn-sm">
+                Potential Surplus ({{ analysis.kpis.surplus_batches_count }})
+            </a>
+            <a href="{{ url_for('analysis.low_stock_page', shop_id=shop.id, **query_params) }}"
+               class="btn {% if active_tab == 'low_stock' %}btn-primary{% else %}btn-outline{% endif %} btn-sm">
+                Low Stock ({{ analysis.kpis.low_stock_products_count }})
+            </a>
+            <a href="{{ url_for('analysis.recommendations_page', shop_id=shop.id, **query_params) }}"
+               class="btn {% if active_tab == 'recommendations' %}btn-primary{% else %}btn-outline{% endif %} btn-sm">
+                Recommendations ({{ analysis.kpis.active_recommendations_count }})
+            </a>
+        </div>
+
+        <div style="font-size: 0.82rem; color: #475569;">
+            <span class="badge-active" style="margin-right: 0.35rem;">READ-ONLY ENGINE</span>
+            <span>Analyzed: <code>{{ analysis.freshness.analyzed_at[:19] | replace('T', ' ') }} UTC</code></span>
+            &bull;
+            <span>Fingerprint: <code>{{ analysis.freshness.data_fingerprint[:10] }}</code></span>
+            {% if analysis.freshness.was_cached %}
+                <span class="badge-inactive" title="Verified against current PostgreSQL state">Verified Snapshot (#{{ analysis.freshness.evaluation_count }})</span>
+            {% else %}
+                <span class="badge-active" title="Computed fresh from PostgreSQL ({{ analysis.freshness.recalculated_reason }})">Fresh ({{ analysis.freshness.recalculated_reason }})</span>
+            {% endif %}
+        </div>
+    </div>
+</div>

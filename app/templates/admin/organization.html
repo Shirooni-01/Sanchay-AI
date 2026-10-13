@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Organization Management &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Organization Overview &amp; Administration</h1>
+        <p class="page-subtitle">
+            Tenant-level identity, contact details, default alert thresholds, and operational status.
+        </p>
+    </div>
+</div>
+
+{% if not organization %}
+    {% if user.role == 'SUPER_ADMIN' %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Create Your Organization</h2>
+            <p class="card-subtitle">Initialize your organization record in PostgreSQL to start adding shops and staff.</p>
+        </div>
+
+        <form action="{{ url_for('admin.create_organization_action') }}" method="POST" class="stack-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="name" class="form-label">Organization Name *</label>
+                    <input type="text" id="name" name="name" class="form-input" placeholder="e.g., Sanchay Retail Co-op" required>
+                </div>
+                <div class="form-group">
+                    <label for="code" class="form-label">Unique Organization Code *</label>
+                    <input type="text" id="code" name="code" class="form-input" placeholder="e.g., SANCHAY_ORG" required>
+                </div>
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="contact_email" class="form-label">Contact Email</label>
+                    <input type="email" id="contact_email" name="contact_email" class="form-input" placeholder="hq@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="contact_phone" class="form-label">Contact Phone</label>
+                    <input type="text" id="contact_phone" name="contact_phone" class="form-input" placeholder="+91-9876543210">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="address" class="form-label">Headquarters Address</label>
+                <input type="text" id="address" name="address" class="form-input" placeholder="Street, City, State">
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="low_stock_default_threshold" class="form-label">Default Low-Stock Threshold (Units)</label>
+                    <input type="number" id="low_stock_default_threshold" name="low_stock_default_threshold" class="form-input" value="10" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="near_expiry_days_threshold" class="form-label">Default Near-Expiry Window (Days)</label>
+                    <input type="number" id="near_expiry_days_threshold" name="near_expiry_days_threshold" class="form-input" value="15" min="1" required>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create Organization</button>
+            </div>
+        </form>
+    </div>
+    {% else %}
+    <div class="card">
+        <p class="empty-state">Your account is not associated with an organization yet.</p>
+    </div>
+    {% endif %}
+{% else %}
+<div class="landing-grid">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">{{ organization.name }}</h2>
+            <p class="card-subtitle">Organization Code: <code>{{ organization.code }}</code></p>
+        </div>
+
+        <dl class="detail-list">
+            <div class="detail-row">
+                <dt>Organization ID</dt>
+                <dd><code>#{{ organization.id }}</code></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Operational Status</dt>
+                <dd>
+                    {% if organization.status == 'ACTIVE' %}
+                        <span class="badge-active">ACTIVE</span>
+                    {% else %}
+                        <span class="badge-inactive">{{ organization.status }}</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="detail-row">
+                <dt>Contact Email</dt>
+                <dd>{{ organization.contact_email or 'Not specified' }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Contact Phone</dt>
+                <dd>{{ organization.contact_phone or 'Not specified' }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Address</dt>
+                <dd>{{ organization.address or 'Not specified' }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Default Low-Stock Threshold</dt>
+                <dd>{{ organization.low_stock_default_threshold }} units</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Default Near-Expiry Threshold</dt>
+                <dd>{{ organization.near_expiry_days_threshold }} days</dd>
+            </div>
+        </dl>
+    </div>
+
+    {% if user.role == 'SUPER_ADMIN' %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Edit Organization Settings</h2>
+            <p class="card-subtitle">Super Admin controls for organization profile, thresholds, and activation status.</p>
+        </div>
+
+        <form action="{{ url_for('admin.update_organization_action') }}" method="POST" class="stack-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="edit_name" class="form-label">Organization Name *</label>
+                    <input type="text" id="edit_name" name="name" class="form-input" value="{{ organization.name }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_code" class="form-label">Organization Code *</label>
+                    <input type="text" id="edit_code" name="code" class="form-input" value="{{ organization.code }}" required>
+                </div>
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="edit_contact_email" class="form-label">Contact Email</label>
+                    <input type="email" id="edit_contact_email" name="contact_email" class="form-input" value="{{ organization.contact_email or '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="edit_contact_phone" class="form-label">Contact Phone</label>
+                    <input type="text" id="edit_contact_phone" name="contact_phone" class="form-input" value="{{ organization.contact_phone or '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="edit_address" class="form-label">Headquarters Address</label>
+                <input type="text" id="edit_address" name="address" class="form-input" value="{{ organization.address or '' }}">
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="edit_low_stock" class="form-label">Low-Stock Default Threshold</label>
+                    <input type="number" id="edit_low_stock" name="low_stock_default_threshold" class="form-input" value="{{ organization.low_stock_default_threshold }}" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_near_expiry" class="form-label">Near-Expiry Window (Days)</label>
+                    <input type="number" id="edit_near_expiry" name="near_expiry_days_threshold" class="form-input" value="{{ organization.near_expiry_days_threshold }}" min="1" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="edit_status" class="form-label">Organization Status</label>
+                <select id="edit_status" name="status" class="form-input">
+                    <option value="ACTIVE" {% if organization.status == 'ACTIVE' %}selected{% endif %}>ACTIVE (Operational)</option>
+                    <option value="INACTIVE" {% if organization.status == 'INACTIVE' %}selected{% endif %}>INACTIVE (Deactivated)</option>
+                </select>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Organization Changes</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

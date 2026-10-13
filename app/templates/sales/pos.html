@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+{% block title %}POS Billing Counter &mdash; {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">POS Billing Counter &mdash; {{ shop.name }}</h1>
+        <p class="page-subtitle">
+            Shop Code: <code>{{ shop.code }}</code> &bull;
+            Automatic <strong>FEFO (First Expired, First Out)</strong> batch deduction &bull;
+            Server-verified pricing &amp; stock
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Sales History &amp; Summaries</a>
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Inventory Overview</a>
+        <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Product Catalog</a>
+    </div>
+</div>
+
+{% if shop.status != 'ACTIVE' %}
+<div class="alert alert-error" role="alert">
+    <span>This shop is currently <strong>{{ shop.status }}</strong>. New POS sales are disabled while historical records remain accessible.</span>
+</div>
+{% endif %}
+
+<section class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <span class="stat-label">Today's Completed Invoices</span>
+        <strong class="stat-value">{{ today_summary.completed_sales_count }}</strong>
+        <span class="stat-meta">{{ today_summary.total_invoices_count }} total invoices today</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Today's Net Sales Revenue</span>
+        <strong class="stat-value">&#8377;{{ "%.2f"|format(today_summary.net_sales_revenue) }}</strong>
+        <span class="stat-meta">Gross: &#8377;{{ "%.2f"|format(today_summary.gross_sales_revenue) }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Today's Net Units Sold</span>
+        <strong class="stat-value">{{ today_summary.net_units_sold }}</strong>
+        <span class="stat-meta">Returned today: {{ today_summary.returned_units }}</span>
+    </div>
+</section>
+
+<div class="grid-2-col">
+    <!-- Left Column: Product Search & Selection -->
+    <section class="card">
+        <div class="card-header card-header-split">
+            <div>
+                <h2 class="card-title">1. Select Sellable Products</h2>
+                <p class="card-subtitle">Only active products are listed. Expired, damaged, and reserved stock are excluded from sellable quantity.</p>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="get" action="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="filter-bar" style="margin-bottom: 1rem;">
+                <input type="text" name="q" id="pos-product-search" value="{{ search_q }}" class="form-input" placeholder="Search by product name or SKU...">
+                <select name="category" class="form-input">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+                {% if search_q or category_filter %}
+                <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Clear</a>
+                {% endif %}
+            </form>
+
+            {% if products %}
+            <div class="table-responsive">
+                <table class="data-table" id="pos-products-table">
+                    <thead>
+                        <tr>
+                            <th>Product &amp; SKU</th>
+                            <th>Selling Price</th>
+                            <th>Sellable Stock</th>
+                            <th>Earliest Expiry</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in products %}
+                        <tr class="pos-product-row"
+                            data-product-id="{{ item.product_id }}"
+                            data-sku="{{ item.sku }}"
+                            data-name="{{ item.name }}"
+                            data-unit="{{ item.unit }}"
+                            data-price="{{ '%.2f'|format(item.selling_price) }}"
+                            data-sellable="{{ item.sellable_qty }}">
+                            <td>
+                                <strong>{{ item.name }}</strong>
+                                <div class="text-muted text-xs"><code>{{ item.sku }}</code> &bull; {{ item.category }}</div>
+                            </td>
+                            <td><strong>&#8377;{{ "%.2f"|format(item.selling_price) }}</strong> / {{ item.unit }}</td>
+                            <td>
+                                {% if item.sellable_qty > 0 %}
+                                <span class="badge-active">{{ item.sellable_qty }} {{ item.unit }}</span>
+                                {% else %}
+                                <span class="badge-inactive">0 (Out of Stock)</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.earliest_expiry_date %}
+                                <span>{{ item.earliest_expiry_date }}</span>
+                                {% else %}
+                                <span class="text-muted">Non-perishable / N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.sellable_qty > 0 and shop.status == 'ACTIVE' %}
+                                <button type="button"
+                                        class="btn btn-primary btn-sm js-add-to-cart"
+                                        data-product-id="{{ item.product_id }}"
+                                        data-sku="{{ item.sku }}"
+                                        data-name="{{ item.name }}"
+                                        data-unit="{{ item.unit }}"
+                                        data-price="{{ '%.2f'|format(item.selling_price) }}"
+                                        data-sellable="{{ item.sellable_qty }}">
+                                    + Add
+                                </button>
+                                {% else %}
+                                <button type="button" class="btn btn-outline btn-sm" disabled>Unavailable</button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-state">No active products found in this shop's catalog.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Right Column: Active POS Cart & Checkout Form -->
+    <section class="card">
+        <div class="card-header card-header-split">
+            <div>
+                <h2 class="card-title">2. Current Customer Cart &amp; Checkout</h2>
+                <p class="card-subtitle">All prices and FEFO batch allocations are revalidated on the server upon submission.</p>
+            </div>
+            <button type="button" id="pos-clear-cart-btn" class="btn btn-outline btn-sm">Clear Cart</button>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('sales.pos_checkout_action', shop_id=shop.id) }}" id="pos-checkout-form" class="auth-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="idempotency_key" id="pos-idempotency-key" value="{{ form_idempotency_key }}">
+                <input type="hidden" name="cart_json" id="pos-cart-json" value="">
+
+                <div class="table-responsive" style="margin-bottom: 1rem;">
+                    <table class="data-table" id="pos-cart-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Unit Price</th>
+                                <th>Qty</th>
+                                <th>Line Total</th>
+                                <th>Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pos-cart-tbody">
+                            <tr id="pos-cart-empty-row">
+                                <td colspan="5" class="text-muted" style="text-align: center;">
+                                    Click <strong>+ Add</strong> on any product on the left (or select below) to add items to the bill.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Progressive Enhancement Fallback Row for No-JS Submissions -->
+                <noscript>
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label class="form-label" for="fallback_product_id">Select Product *</label>
+                            <select id="fallback_product_id" name="product_id" class="form-input">
+                                <option value="">-- Choose Product --</option>
+                                {% for item in products if item.sellable_qty > 0 %}
+                                <option value="{{ item.product_id }}">{{ item.sku }} &mdash; {{ item.name }} (&#8377;{{ "%.2f"|format(item.selling_price) }}, Avail: {{ item.sellable_qty }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="fallback_qty">Quantity *</label>
+                            <input id="fallback_qty" type="number" name="quantity" min="1" value="1" class="form-input">
+                        </div>
+                    </div>
+                </noscript>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="payment_mode">Payment Method *</label>
+                        <select id="payment_mode" name="payment_mode" class="form-input" required>
+                            {% for mode in payment_modes %}
+                            <option value="{{ mode }}" {% if mode == 'CASH' %}selected{% endif %}>{{ mode }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="discount_amount">Approved Bill Discount (INR)</label>
+                        <input id="discount_amount" name="discount_amount" type="number" step="0.01" min="0" value="0.00" class="form-input">
+                    </div>
+                </div>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="customer_name">Customer Name (Optional)</label>
+                        <input id="customer_name" name="customer_name" type="text" maxlength="120" class="form-input" placeholder="Walk-in Customer">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="customer_phone">Customer Phone (Optional)</label>
+                        <input id="customer_phone" name="customer_phone" type="text" maxlength="20" class="form-input" placeholder="9876543210">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="notes">Invoice Remarks (Optional)</label>
+                    <input id="notes" name="notes" type="text" maxlength="500" class="form-input" placeholder="Counter checkout notes">
+                </div>
+
+                <div class="pos-totals-box" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin: 1rem 0;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                        <span>Gross Subtotal:</span>
+                        <strong id="pos-subtotal-display">&#8377;0.00</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                        <span>Approved Discount:</span>
+                        <strong id="pos-discount-display">&#8377;0.00</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 1.15rem; border-top: 1px solid #cbd5e1; padding-top: 0.5rem;">
+                        <strong>Final Total Payable:</strong>
+                        <strong id="pos-final-total-display">&#8377;0.00</strong>
+                    </div>
+                </div>
+
+                <button type="submit" id="pos-confirm-sale-btn" class="btn btn-primary" {% if shop.status != 'ACTIVE' %}disabled{% endif %}>
+                    Confirm Sale &amp; Deduct FEFO Stock
+                </button>
+            </form>
+        </div>
+    </section>
+</div>
+
+<!-- Recent Today's Invoices -->
+<section class="card" style="margin-top: 1.5rem;">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Today's Recent Sales at {{ shop.name }}</h2>
+        <a href="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">View All Sales</a>
+    </div>
+    <div class="card-body">
+        {% if recent_sales %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Receipt / Invoice #</th>
+                        <th>Time</th>
+                        <th>Customer</th>
+                        <th>Payment</th>
+                        <th>Qty Sold</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in recent_sales %}
+                    <tr>
+                        <td><code>{{ s.invoice_number }}</code></td>
+                        <td>{{ s.created_at[:19].replace('T', ' ') if s.created_at else '' }}</td>
+                        <td>{{ s.customer_name or 'Walk-in Customer' }}</td>
+                        <td><code>{{ s.payment_mode }}</code></td>
+                        <td>{{ s.total_quantity_sold }} (Net: {{ s.net_quantity_sold }})</td>
+                        <td><strong>&#8377;{{ "%.2f"|format(s.total_amount) }}</strong></td>
+                        <td>
+                            {% if s.status == 'COMPLETED' %}
+                            <span class="badge-active">COMPLETED</span>
+                            {% elif s.status == 'CANCELLED' %}
+                            <span class="badge-inactive">CANCELLED</span>
+                            {% else %}
+                            <span class="role-badge">{{ s.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('sales.sale_detail_page', shop_id=shop.id, sale_id=s.id) }}" class="btn btn-outline btn-sm">Details</a>
+                            <a href="{{ url_for('sales.sale_receipt_page', shop_id=shop.id, sale_id=s.id) }}" class="btn btn-secondary btn-sm">Receipt</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No sales recorded today yet for {{ shop.name }}.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pos.js') }}"></script>
+{% endblock %}

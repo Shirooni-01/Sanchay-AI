@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} ({{ product.sku }}) — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ product.name }} (<code>{{ product.sku }}</code>)</h1>
+        <p class="page-subtitle">
+            Shop: <strong>{{ shop.name }}</strong> ({{ shop.code }}) &bull; Category: {{ product.category }} &bull; Unit: {{ product.unit }}
+            {% if product.is_active %}
+            <span class="badge-active">ACTIVE</span>
+            {% else %}
+            <span class="badge-inactive">INACTIVE</span>
+            {% endif %}
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">&larr; Back to Catalog</a>
+        {% if shop.is_operational and product.is_active %}
+        <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id, product_id=product.product_id) }}" class="btn btn-primary btn-sm">Receive Batch for SKU</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="stats-grid mb-4">
+    <div class="stat-card">
+        <span class="stat-label">Sellable Available Stock</span>
+        <span class="stat-value">{{ product.available_qty }} {{ product.unit }}</span>
+        <span class="stat-meta">
+            Reorder threshold: {{ product.reorder_level }} {{ product.unit }}
+            {% if product.is_out_of_stock %}
+            <span class="badge-danger">OUT OF STOCK</span>
+            {% elif product.is_low_stock %}
+            <span class="badge-warning">LOW STOCK</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Pricing (Cost / Selling)</span>
+        <span class="stat-value">&#8377;{{ "%.2f"|format(product.default_purchase_price) }} / &#8377;{{ "%.2f"|format(product.selling_price) }}</span>
+        <span class="stat-meta">Perishable: {{ "Yes" if product.is_perishable else "No" }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Active &amp; Near-Expiry Batches</span>
+        <span class="stat-value">{{ product.active_batch_count }} Active</span>
+        <span class="stat-meta">
+            Near-expiry (&le; {{ product.near_expiry_threshold_days }}d): {{ product.near_expiry_batch_count }}
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Non-Sellable Buckets</span>
+        <span class="stat-value">Exp: {{ product.expired_qty }} | Dmg: {{ product.damaged_qty }}</span>
+        <span class="stat-meta">Reserved: {{ product.reserved_qty }} {{ product.unit }}</span>
+    </div>
+</div>
+
+{% if can_manage_catalog %}
+<section class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Edit Product &amp; Shop Configuration</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('catalog.update_shop_product_action', shop_id=shop.id, shop_product_id=product.shop_product_id) }}" class="auth-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label class="form-label" for="name">Product Name *</label>
+                    <input id="name" name="name" type="text" class="form-input" required value="{{ product.name }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="category">Category *</label>
+                    <input id="category" name="category" type="text" class="form-input" required value="{{ product.category }}">
+                </div>
+            </div>
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label class="form-label" for="unit">Unit *</label>
+                    <select id="unit" name="unit" class="form-input" required>
+                        {% for u in units %}
+                        <option value="{{ u }}" {% if u == product.unit %}selected{% endif %}>{{ u }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="is_active">Shop Catalog Status</label>
+                    <select id="is_active" name="is_active" class="form-input">
+                        <option value="true" {% if product.shop_product_is_active %}selected{% endif %}>Active (Available for Operations)</option>
+                        <option value="false" {% if not product.shop_product_is_active %}selected{% endif %}>Deactivated (Preserves Historical Batches &amp; Ledger)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label class="form-label" for="default_purchase_price">Default Purchase Cost (INR) *</label>
+                    <input id="default_purchase_price" name="default_purchase_price" type="number" step="0.01" min="0" class="form-input" required value="{{ '%.2f'|format(product.default_purchase_price) }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="selling_price">Shop Selling Price (INR) *</label>
+                    <input id="selling_price" name="selling_price" type="number" step="0.01" min="0" class="form-input" required value="{{ '%.2f'|format(product.selling_price) }}">
+                </div>
+            </div>
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label class="form-label" for="reorder_level">Reorder Threshold *</label>
+                    <input id="reorder_level" name="reorder_level" type="number" min="0" class="form-input" required value="{{ product.reorder_level }}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="near_expiry_threshold_days">Near-Expiry Warning Days *</label>
+                    <input id="near_expiry_threshold_days" name="near_expiry_threshold_days" type="number" min="1" max="365" class="form-input" required value="{{ product.near_expiry_threshold_days }}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="description">Description</label>
+                <input id="description" name="description" type="text" class="form-input" value="{{ product.description or '' }}">
+            </div>
+            <button type="submit" class="btn btn-primary">Save Product Configuration</button>
+        </form>
+    </div>
+</section>
+{% endif %}
+
+<section class="card mb-4">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Inventory Batches for {{ product.sku }} (FEFO Order)</h2>
+        <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id, product_id=product.product_id) }}" class="btn btn-secondary btn-sm">View All in Batch Explorer</a>
+    </div>
+    <div class="card-body">
+        {% if product.batches %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Batch Code</th>
+                        <th>Received Date</th>
+                        <th>Expiry Date</th>
+                        <th>Initial Qty</th>
+                        <th>Available Qty</th>
+                        <th>Expired / Damaged</th>
+                        <th>Unit Cost</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in product.batches %}
+                    <tr>
+                        <td><code>{{ b.batch_code }}</code></td>
+                        <td>{{ b.received_date }}</td>
+                        <td>
+                            {% if b.expiry_date %}
+                            <strong>{{ b.expiry_date }}</strong>
+                            <span class="text-muted text-xs">({{ b.days_until_expiry }}d)</span>
+                            {% else %}
+                            <span class="text-muted">Non-Perishable</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ b.initial_qty }}</td>
+                        <td><strong>{{ b.available_qty }}</strong></td>
+                        <td>{{ b.expired_qty }} / {{ b.damaged_qty }}</td>
+                        <td>&#8377;{{ "%.2f"|format(b.unit_cost) }}</td>
+                        <td>
+                            {% if b.status == 'EXPIRED' or b.is_expired %}
+                            <span class="badge-danger">EXPIRED</span>
+                            {% elif b.status == 'DEPLETED' %}
+                            <span class="badge-inactive">DEPLETED</span>
+                            {% elif b.is_near_expiry %}
+                            <span class="badge-warning">NEAR EXPIRY</span>
+                            {% else %}
+                            <span class="badge-active">ACTIVE</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=b.id) }}" class="btn btn-secondary btn-sm">Batch Ledger</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No inventory batches have been received for this product yet.</p>
+        {% endif %}
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Recent Stock Movements ({{ product.sku }})</h2>
+        <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id, product_id=product.product_id) }}" class="btn btn-secondary btn-sm">Full Product Ledger</a>
+    </div>
+    <div class="card-body">
+        {% if product.recent_movements %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp (UTC)</th>
+                        <th>Batch</th>
+                        <th>Movement Type</th>
+                        <th>Bucket</th>
+                        <th>Before &rarr; Change &rarr; After</th>
+                        <th>Actor</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in product.recent_movements %}
+                    <tr>
+                        <td>{{ m.created_at }}</td>
+                        <td><code>{{ m.batch_code or ('#' ~ m.batch_id) }}</code></td>
+                        <td><span class="badge-role">{{ m.movement_type }}</span></td>
+                        <td><code>{{ m.bucket_affected }}</code></td>
+                        <td>
+                            {{ m.balance_before }}
+                            <strong>{% if m.quantity_change >= 0 %}+{{ m.quantity_change }}{% else %}{{ m.quantity_change }}{% endif %}</strong>
+                            &rarr; <strong>{{ m.balance_after }}</strong>
+                        </td>
+                        <td>{{ m.performed_by_username or ('User #' ~ m.performed_by_user_id) }}</td>
+                        <td>{{ m.reason or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No stock movements recorded for this product yet.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

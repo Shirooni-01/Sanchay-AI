@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Adjust Batch Stock — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Authorized Stock Adjustment — {{ shop.name }} ({{ shop.code }})</h1>
+        <p class="page-subtitle">
+            Record audited cycle-count additions, subtractions, damage write-offs, or manual expiry quarantine with mandatory reasons.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">&larr; Inventory Overview</a>
+        <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">View Stock Ledger</a>
+    </div>
+</div>
+
+<div class="subnav-tabs mb-4">
+    <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="subnav-tab">Overview</a>
+    <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="subnav-tab">Product Catalog</a>
+    <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="subnav-tab">Batches (FEFO)</a>
+    <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="subnav-tab">Receive Stock</a>
+    <a href="{{ url_for('inventory.adjust_stock_page', shop_id=shop.id) }}" class="subnav-tab active">Adjust Stock</a>
+    <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Low Stock Alerts</a>
+    <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Expiry Alerts</a>
+    <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="subnav-tab">Stock Ledger</a>
+</div>
+
+<div class="dashboard-grid mb-4">
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">Submit Batch Stock Adjustment</h2>
+        </div>
+        <div class="card-body">
+            {% if not shop.is_operational %}
+            <p class="empty-state">This shop is deactivated. Stock adjustments are disabled.</p>
+            {% elif batches %}
+            <form method="post" action="{{ url_for('inventory.adjust_stock_action', shop_id=shop.id) }}" class="auth-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label class="form-label" for="batch_id">Target Inventory Batch *</label>
+                    <select id="batch_id" name="batch_id" class="form-input" required>
+                        <option value="">-- Select Batch --</option>
+                        {% for b in batches %}
+                        <option value="{{ b.id }}" {% if selected_batch_id == b.id %}selected{% endif %}>
+                            {{ b.batch_code }} — {{ b.product_sku }} ({{ b.product_name }}) | Avail: {{ b.available_qty }}, Exp: {{ b.expiry_date or 'N/A' }} [{{ b.status }}]
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="movement_type">Adjustment Type *</label>
+                        <select id="movement_type" name="movement_type" class="form-input" required>
+                            <option value="ADJUSTMENT_SUBTRACT">ADJUSTMENT_SUBTRACT (Cycle Count Reduction)</option>
+                            <option value="ADJUSTMENT_ADD">ADJUSTMENT_ADD (Cycle Count Addition)</option>
+                            <option value="MARK_DAMAGED">MARK_DAMAGED (Transfer Available &rarr; Damaged Bucket)</option>
+                            <option value="MARK_EXPIRED">MARK_EXPIRED (Transfer Available &rarr; Expired Bucket)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="quantity">Quantity (Positive Integer) *</label>
+                        <input id="quantity" name="quantity" type="number" min="1" class="form-input" required value="1">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reason">Mandatory Audit Reason (Min 3 chars) *</label>
+                    <input id="reason" name="reason" type="text" class="form-input" required minlength="3" maxlength="300" placeholder="e.g. Damaged packaging during shelf restocking">
+                </div>
+                <button type="submit" class="btn btn-primary">Record Audited Adjustment</button>
+            </form>
+            {% else %}
+            <p class="empty-state">No inventory batches exist in {{ shop.name }} yet.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">Batch Bucket Reference</h2>
+        </div>
+        <div class="card-body">
+            {% if batches %}
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Batch</th>
+                            <th>Product</th>
+                            <th>Available</th>
+                            <th>Damaged</th>
+                            <th>Expired</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for b in batches[:15] %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=b.id) }}">
+                                    <code>{{ b.batch_code }}</code>
+                                </a>
+                            </td>
+                            <td>{{ b.product_name }}</td>
+                            <td><strong>{{ b.available_qty }}</strong></td>
+                            <td>{{ b.damaged_qty }}</td>
+                            <td>{{ b.expired_qty }}</td>
+                            <td><span class="badge-role">{{ b.status }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-state">No batches available.</p>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

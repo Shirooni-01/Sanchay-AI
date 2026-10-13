@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Propose Stock Transfer &mdash; {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Propose Stock Transfer &mdash; {{ shop.name }}</h1>
+        <p class="page-subtitle">
+            Transfer surplus stock to another shop in <code>{{ shop.organization.name if shop.organization else 'Organization' }}</code>.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-outline btn-sm">&larr; Back to Transfers</a>
+    </div>
+</div>
+
+<div class="grid-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; align-items: start;">
+    <!-- Transfer Form Card -->
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">Transfer Proposal Details</h2>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('transfers.create_transfer_form_action', shop_id=shop.id) }}" id="transfer-create-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label class="form-label"><strong>Source Shop (Supplying Surplus)</strong></label>
+                    <input type="text" class="form-input" value="{{ shop.name }} ({{ shop.code }})" disabled>
+                    <input type="hidden" name="source_shop_id" value="{{ shop.id }}">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label class="form-label" for="recipient_shop_id"><strong>Recipient Shop (Destination) *</strong></label>
+                    <select name="recipient_shop_id" id="recipient_shop_id" class="form-input" required>
+                        <option value="">-- Select Recipient Shop --</option>
+                        {% for r in recipients %}
+                        <option value="{{ r.shop_id }}" {% if preselected_recipient_id == r.shop_id %}selected{% endif %}>
+                            {{ r.name }} ({{ r.city or r.code }})
+                            {% if r.needs_replenishment %} &bull; [LOW STOCK DEMAND]{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="text-muted text-xs" style="margin-top: 0.25rem;">
+                        Sister shops within the same organization eligible to receive stock.
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label class="form-label" for="source_batch_id"><strong>Product &amp; Source Batch *</strong></label>
+                    <select name="source_batch_id" id="source_batch_id" class="form-input" required>
+                        <option value="">-- Select Batch to Transfer --</option>
+                        {% for b in batches %}
+                        <option value="{{ b.id }}"
+                                data-product-id="{{ b.product_id }}"
+                                data-product-name="{{ b.product.name }}"
+                                data-available="{{ b.available_qty }}"
+                                data-cost="{{ b.unit_cost }}"
+                                data-expiry="{{ b.expiry_date.isoformat() if b.expiry_date else 'Non-perishable' }}"
+                                {% if preselected_batch_id == b.id %}selected{% endif %}>
+                            {{ b.product.name }} &bull; Batch: {{ b.batch_code }} &bull; Avail: {{ b.available_qty }} {{ b.product.unit }} &bull; Exp: {{ b.expiry_date if b.expiry_date else 'N/A' }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <input type="hidden" name="product_id" id="product_id" value="">
+                    <div class="text-muted text-xs" style="margin-top: 0.25rem;">
+                        Only non-expired batches with available sellable stock are shown.
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="quantity"><strong>Transfer Quantity *</strong></label>
+                        <input type="number" name="quantity" id="quantity" class="form-input" min="1" max="100000" value="{{ preselected_qty or 1 }}" required>
+                        <div class="text-muted text-xs" id="avail-hint" style="margin-top: 0.25rem;">
+                            Max available will update upon batch selection.
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="unit_transfer_price"><strong>Unit Transfer Price (&#8377;) *</strong></label>
+                        <input type="number" step="0.01" min="0" name="unit_transfer_price" id="unit_transfer_price" class="form-input" value="0.00" required>
+                        <div class="text-muted text-xs" style="margin-top: 0.25rem;">
+                            Internal inter-store accounting cost per unit.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label class="form-label" for="offer_duration_days"><strong>Offer Expiration</strong></label>
+                    <select name="offer_duration_days" id="offer_duration_days" class="form-input">
+                        <option value="3">3 Days</option>
+                        <option value="7" selected>7 Days (Standard)</option>
+                        <option value="14">14 Days</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label class="form-label" for="notes"><strong>Proposal Remarks / Logistics Instructions</strong></label>
+                    <textarea name="notes" id="notes" class="form-input" rows="3" placeholder="Optional notes for the recipient shop owner regarding handover or transport..."></textarea>
+                </div>
+
+                <div class="form-actions" style="display: flex; gap: 1rem;">
+                    <button type="submit" class="btn btn-primary" id="submit-proposal-btn">Propose Transfer Offer &rarr;</button>
+                    <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-outline">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- Informational Card -->
+    <aside>
+        <section class="card" style="margin-bottom: 1rem;">
+            <div class="card-header">
+                <h3 class="card-title">Dual-Approval Guarantee</h3>
+            </div>
+            <div class="card-body text-sm" style="line-height: 1.6;">
+                <p><strong>How transfers work (<code>BR-008</code>, <code>BR-009</code>):</strong></p>
+                <ol style="padding-left: 1.2rem; margin-top: 0.5rem;">
+                    <li><strong>Proposal:</strong> Submitting this form sends an offer to the recipient shop. No stock is moved yet.</li>
+                    <li><strong>Mutual Agreement:</strong> Once the recipient owner approves, stock is locked into <code>reserved_qty</code> so you cannot accidentally sell it.</li>
+                    <li><strong>Physical Handover:</strong> Your shop marks the units as <code>DISPATCHED</code>.</li>
+                    <li><strong>Receipt &amp; Completion:</strong> When the recipient owner confirms receipt, units are atomically deducted from your shop and added to theirs in a single ACID transaction.</li>
+                </ol>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <h3 class="card-title">Selected Batch Preview</h3>
+            </div>
+            <div class="card-body text-sm" id="batch-preview" style="line-height: 1.6;">
+                <p class="text-muted">Select a batch from the dropdown to preview details.</p>
+            </div>
+        </section>
+    </aside>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const batchSelect = document.getElementById("source_batch_id");
+    const productInput = document.getElementById("product_id");
+    const qtyInput = document.getElementById("quantity");
+    const priceInput = document.getElementById("unit_transfer_price");
+    const availHint = document.getElementById("avail-hint");
+    const previewDiv = document.getElementById("batch-preview");
+
+    function updateBatchSelection() {
+        const opt = batchSelect.options[batchSelect.selectedIndex];
+        if (!opt || !opt.value) {
+            previewDiv.innerHTML = '<p class="text-muted">Select a batch from the dropdown to preview details.</p>';
+            return;
+        }
+
+        const prodId = opt.getAttribute("data-product-id");
+        const prodName = opt.getAttribute("data-product-name");
+        const avail = parseInt(opt.getAttribute("data-available") || "0", 10);
+        const cost = opt.getAttribute("data-cost") || "0.00";
+        const expiry = opt.getAttribute("data-expiry");
+
+        productInput.value = prodId;
+        qtyInput.max = avail;
+        if (parseFloat(priceInput.value) === 0 || priceInput.value === "") {
+            priceInput.value = parseFloat(cost).toFixed(2);
+        }
+        availHint.textContent = "Available in batch: " + avail + " units.";
+
+        previewDiv.innerHTML = `
+            <div><strong>Product:</strong> ${prodName}</div>
+            <div><strong>Available Units:</strong> ${avail}</div>
+            <div><strong>Original Unit Cost:</strong> &#8377;${parseFloat(cost).toFixed(2)}</div>
+            <div><strong>Expiry Date:</strong> ${expiry}</div>
+        `;
+    }
+
+    batchSelect.addEventListener("change", updateBatchSelection);
+    if (batchSelect.value) {
+        updateBatchSelection();
+    }
+});
+</script>
+{% endblock %}

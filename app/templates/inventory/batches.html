@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Batch Inventory (FEFO) — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Batch Inventory (FEFO Order) — {{ shop.name }} ({{ shop.code }})</h1>
+        <p class="page-subtitle">
+            First-Expired, First-Out (FEFO) batch queue ordered by earliest expiry date, receipt date, and batch ID.
+        </p>
+    </div>
+    <div class="header-actions">
+        {% if shop.is_operational %}
+        <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">Receive New Batch</a>
+        {% endif %}
+        {% if can_adjust_stock %}
+        <a href="{{ url_for('inventory.adjust_stock_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Adjust Stock</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="subnav-tabs mb-4">
+    <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="subnav-tab">Overview</a>
+    <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="subnav-tab">Product Catalog</a>
+    <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="subnav-tab active">Batches (FEFO)</a>
+    <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="subnav-tab">Receive Stock</a>
+    {% if can_adjust_stock %}
+    <a href="{{ url_for('inventory.adjust_stock_page', shop_id=shop.id) }}" class="subnav-tab">Adjust Stock</a>
+    {% endif %}
+    <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Low Stock Alerts</a>
+    <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Expiry Alerts</a>
+    <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="subnav-tab">Stock Ledger</a>
+</div>
+
+<section class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Filter Batches</h2>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="filter-bar">
+            <div class="form-group">
+                <label class="form-label" for="filter-q">Batch Code / SKU / Supplier</label>
+                <input id="filter-q" name="q" type="text" class="form-input" value="{{ search_query }}" placeholder="Search batch code or SKU">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="filter-product">Product</label>
+                <select id="filter-product" name="product_id" class="form-input">
+                    <option value="">All Shop Products</option>
+                    {% for p in products %}
+                    <option value="{{ p.product_id }}" {% if product_filter == p.product_id %}selected{% endif %}>
+                        {{ p.sku }} — {{ p.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="filter-status">Batch Lifecycle Status</label>
+                <select id="filter-status" name="status" class="form-input">
+                    <option value="" {% if not status_filter %}selected{% endif %}>All Statuses</option>
+                    <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>ACTIVE</option>
+                    <option value="DEPLETED" {% if status_filter == 'DEPLETED' %}selected{% endif %}>DEPLETED</option>
+                    <option value="EXPIRED" {% if status_filter == 'EXPIRED' %}selected{% endif %}>EXPIRED</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Expiry Filter</label>
+                <div class="checkbox-inline-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="near_expiry" value="true" {% if near_expiry %}checked{% endif %}>
+                        Near Expiry
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="expired" value="true" {% if expired_only %}checked{% endif %}>
+                        Expired Only
+                    </label>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Reset</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">FEFO Batch Queue ({{ meta.total }} batches)</h2>
+        <span class="text-muted">Page {{ meta.page }} of {{ meta.total_pages }}</span>
+    </div>
+    <div class="card-body">
+        {% if batches %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Batch Code</th>
+                        <th>SKU / Product</th>
+                        <th>Received Date</th>
+                        <th>Expiry Date</th>
+                        <th>Initial</th>
+                        <th>Available</th>
+                        <th>Expired / Damaged</th>
+                        <th>Unit Cost</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in batches %}
+                    <tr>
+                        <td><code>{{ b.batch_code }}</code></td>
+                        <td>
+                            <strong>{{ b.product_name }}</strong>
+                            <div class="text-muted text-xs"><code>{{ b.product_sku }}</code> ({{ b.unit }})</div>
+                        </td>
+                        <td>{{ b.received_date }}</td>
+                        <td>
+                            {% if b.expiry_date %}
+                            <strong>{{ b.expiry_date }}</strong>
+                            <div class="text-muted text-xs">
+                                {% if b.days_until_expiry <= 0 %}
+                                Expired ({{ b.days_until_expiry }}d)
+                                {% else %}
+                                In {{ b.days_until_expiry }} days
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">Non-Perishable</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ b.initial_qty }}</td>
+                        <td><strong>{{ b.available_qty }}</strong></td>
+                        <td>{{ b.expired_qty }} / {{ b.damaged_qty }}</td>
+                        <td>&#8377;{{ "%.2f"|format(b.unit_cost) }}</td>
+                        <td>
+                            {% if b.status == 'EXPIRED' or b.is_expired %}
+                            <span class="badge-danger">EXPIRED</span>
+                            {% elif b.status == 'DEPLETED' %}
+                            <span class="badge-inactive">DEPLETED</span>
+                            {% elif b.is_near_expiry %}
+                            <span class="badge-warning">NEAR EXPIRY</span>
+                            {% else %}
+                            <span class="badge-active">ACTIVE</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-cluster">
+                                <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=b.id) }}" class="btn btn-secondary btn-sm">Details</a>
+                                {% if can_adjust_stock %}
+                                <a href="{{ url_for('inventory.adjust_stock_page', shop_id=shop.id, batch_id=b.id) }}" class="btn btn-secondary btn-sm">Adjust</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if meta.total_pages > 1 %}
+        <div class="pagination-bar mt-3">
+            {% if meta.page > 1 %}
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id, page=meta.page - 1, product_id=product_filter, status=status_filter, q=search_query) }}">Previous</a>
+            {% endif %}
+            <span class="text-muted">Page {{ meta.page }} of {{ meta.total_pages }}</span>
+            {% if meta.page < meta.total_pages %}
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id, page=meta.page + 1, product_id=product_filter, status=status_filter, q=search_query) }}">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="empty-state">No inventory batches matched your filters in {{ shop.name }}.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

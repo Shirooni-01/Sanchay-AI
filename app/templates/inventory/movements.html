@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Stock Movement Ledger — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Immutable Stock Movement Ledger — {{ shop.name }} ({{ shop.code }})</h1>
+        <p class="page-subtitle">
+            Append-only inventory audit ledger enforcing <code>balance_before + quantity_change = balance_after</code> on every batch mutation.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">&larr; Inventory Overview</a>
+        <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">View Batches</a>
+    </div>
+</div>
+
+<div class="subnav-tabs mb-4">
+    <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="subnav-tab">Overview</a>
+    <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="subnav-tab">Product Catalog</a>
+    <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="subnav-tab">Batches (FEFO)</a>
+    <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="subnav-tab">Receive Stock</a>
+    <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Low Stock Alerts</a>
+    <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Expiry Alerts</a>
+    <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="subnav-tab active">Stock Ledger</a>
+</div>
+
+<section class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Filter Ledger Entries</h2>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="filter-bar">
+            <div class="form-group">
+                <label class="form-label" for="filter-product">Product</label>
+                <select id="filter-product" name="product_id" class="form-input">
+                    <option value="">All Products</option>
+                    {% for p in products %}
+                    <option value="{{ p.product_id }}" {% if product_filter == p.product_id %}selected{% endif %}>
+                        {{ p.sku }} — {{ p.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="filter-mtype">Movement Type</label>
+                <select id="filter-mtype" name="movement_type" class="form-input">
+                    <option value="" {% if not movement_type_filter %}selected{% endif %}>All Movement Types</option>
+                    <option value="RECEIPT" {% if movement_type_filter == 'RECEIPT' %}selected{% endif %}>RECEIPT</option>
+                    <option value="ADJUSTMENT_ADD" {% if movement_type_filter == 'ADJUSTMENT_ADD' %}selected{% endif %}>ADJUSTMENT_ADD</option>
+                    <option value="ADJUSTMENT_SUBTRACT" {% if movement_type_filter == 'ADJUSTMENT_SUBTRACT' %}selected{% endif %}>ADJUSTMENT_SUBTRACT</option>
+                    <option value="MARK_DAMAGED" {% if movement_type_filter == 'MARK_DAMAGED' %}selected{% endif %}>MARK_DAMAGED</option>
+                    <option value="MARK_EXPIRED" {% if movement_type_filter == 'MARK_EXPIRED' %}selected{% endif %}>MARK_EXPIRED</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="filter-bucket">Bucket Affected</label>
+                <select id="filter-bucket" name="bucket_affected" class="form-input">
+                    <option value="" {% if not bucket_filter %}selected{% endif %}>All Buckets</option>
+                    <option value="AVAILABLE" {% if bucket_filter == 'AVAILABLE' %}selected{% endif %}>AVAILABLE</option>
+                    <option value="EXPIRED" {% if bucket_filter == 'EXPIRED' %}selected{% endif %}>EXPIRED</option>
+                    <option value="DAMAGED" {% if bucket_filter == 'DAMAGED' %}selected{% endif %}>DAMAGED</option>
+                    <option value="RESERVED" {% if bucket_filter == 'RESERVED' %}selected{% endif %}>RESERVED</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+                <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Reset</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Stock Movement Entries ({{ meta.total }} records)</h2>
+        <span class="text-muted">Page {{ meta.page }} of {{ meta.total_pages }}</span>
+    </div>
+    <div class="card-body">
+        {% if movements %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Timestamp (UTC)</th>
+                        <th>SKU / Product</th>
+                        <th>Batch</th>
+                        <th>Movement Type</th>
+                        <th>Bucket</th>
+                        <th>Before &rarr; Change &rarr; After</th>
+                        <th>Actor</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in movements %}
+                    <tr>
+                        <td>#{{ m.id }}</td>
+                        <td>{{ m.created_at }}</td>
+                        <td>
+                            <strong>{{ m.product_name }}</strong>
+                            <div class="text-muted text-xs"><code>{{ m.product_sku }}</code></div>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=m.batch_id) }}">
+                                <code>{{ m.batch_code or ('#' ~ m.batch_id) }}</code>
+                            </a>
+                        </td>
+                        <td><span class="badge-role">{{ m.movement_type }}</span></td>
+                        <td><code>{{ m.bucket_affected }}</code></td>
+                        <td>
+                            {{ m.balance_before }}
+                            <strong>{% if m.quantity_change >= 0 %}+{{ m.quantity_change }}{% else %}{{ m.quantity_change }}{% endif %}</strong>
+                            &rarr; <strong>{{ m.balance_after }}</strong>
+                        </td>
+                        <td>{{ m.performed_by_username or ('User #' ~ m.performed_by_user_id) }}</td>
+                        <td>{{ m.reason or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if meta.total_pages > 1 %}
+        <div class="pagination-bar mt-3">
+            {% if meta.page > 1 %}
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id, page=meta.page - 1, product_id=product_filter, movement_type=movement_type_filter, bucket_affected=bucket_filter) }}">Previous</a>
+            {% endif %}
+            <span class="text-muted">Page {{ meta.page }} of {{ meta.total_pages }}</span>
+            {% if meta.page < meta.total_pages %}
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id, page=meta.page + 1, product_id=product_filter, movement_type=movement_type_filter, bucket_affected=bucket_filter) }}">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="empty-state">No stock movements matched your filters in {{ shop.name }}.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

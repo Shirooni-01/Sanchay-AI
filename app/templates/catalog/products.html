@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}Product Catalog — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Product Catalog — {{ shop.name }} ({{ shop.code }})</h1>
+        <p class="page-subtitle">
+            Manual SKU catalog, shop-scoped pricing, reorder thresholds, and reconciled batch stock.
+            {% if not shop.is_operational %}
+            <span class="badge-inactive">Read-Only (Shop or Organization Deactivated)</span>
+            {% endif %}
+        </p>
+    </div>
+    <div class="header-actions">
+        {% if accessible_shops|length > 1 %}
+        <form method="get" action="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="shop-switcher-form">
+            <label for="shop-Context-switch" class="sr-only">Switch Shop</label>
+            <select id="shop-Context-switch" class="form-input form-input-sm" onchange="if(this.value) window.location.href=this.value;">
+                {% for s in accessible_shops %}
+                <option value="{{ url_for('catalog.shop_products_page', shop_id=s.id) }}" {% if s.id == shop.id %}selected{% endif %}>
+                    {{ s.name }} ({{ s.code }}){% if not s.is_active %} [INACTIVE]{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Inventory Overview</a>
+        {% if shop.is_operational %}
+        <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">Receive Batch Stock</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="subnav-tabs mb-4">
+    <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="subnav-tab">Overview</a>
+    <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="subnav-tab active">Product Catalog</a>
+    <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="subnav-tab">Batches (FEFO)</a>
+    <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="subnav-tab">Receive Stock</a>
+    {% if can_manage_catalog %}
+    <a href="{{ url_for('inventory.adjust_stock_page', shop_id=shop.id) }}" class="subnav-tab">Adjust Stock</a>
+    {% endif %}
+    <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Low Stock Alerts</a>
+    <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Expiry Alerts</a>
+    <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="subnav-tab">Stock Ledger</a>
+</div>
+
+<section class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Search &amp; Filter Shop Catalog</h2>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="filter-bar">
+            <div class="form-group">
+                <label class="form-label" for="filter-q">Search SKU / Name / Category</label>
+                <input id="filter-q" name="q" type="text" class="form-input" value="{{ search_query }}" placeholder="e.g. MILK-500ML or Dairy">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="filter-category">Category</label>
+                <select id="filter-category" name="category" class="form-input">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="filter-status">Status</label>
+                <select id="filter-status" name="status" class="form-input">
+                    <option value="" {% if not status_filter %}selected{% endif %}>All Statuses</option>
+                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active Only</option>
+                    <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive Only</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Stock Flags</label>
+                <div class="checkbox-inline-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="low_stock" value="true" {% if low_stock_only %}checked{% endif %}>
+                        Low Stock
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="near_expiry" value="true" {% if near_expiry_only %}checked{% endif %}>
+                        Near Expiry
+                    </label>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Apply Filters</button>
+                <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Reset</a>
+            </div>
+        </form>
+    </div>
+</section>
+
+{% if can_manage_catalog %}
+<div class="dashboard-grid mb-4">
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">Add New Product SKU to Shop</h2>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('catalog.create_shop_product_action', shop_id=shop.id) }}" class="auth-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="sku">Organization SKU Code *</label>
+                        <input id="sku" name="sku" type="text" class="form-input" required maxlength="64" placeholder="DAIRY-MILK-500ML">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="name">Product Name *</label>
+                        <input id="name" name="name" type="text" class="form-input" required maxlength="180" placeholder="Amul Taaza Toned Milk 500ml">
+                    </div>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="category">Category *</label>
+                        <input id="category" name="category" type="text" class="form-input" required maxlength="100" placeholder="Dairy">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="unit">Unit of Measurement *</label>
+                        <select id="unit" name="unit" class="form-input" required>
+                            {% for u in units %}
+                            <option value="{{ u }}" {% if u == 'pack' %}selected{% endif %}>{{ u }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="default_purchase_price">Default Purchase Cost (INR) *</label>
+                        <input id="default_purchase_price" name="default_purchase_price" type="number" step="0.01" min="0" class="form-input" required value="22.00">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="selling_price">Shop Selling Price (INR) *</label>
+                        <input id="selling_price" name="selling_price" type="number" step="0.01" min="0" class="form-input" required value="27.00">
+                    </div>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="reorder_level">Low-Stock Reorder Threshold *</label>
+                        <input id="reorder_level" name="reorder_level" type="number" min="0" class="form-input" required value="15">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="near_expiry_threshold_days">Near-Expiry Warning Days *</label>
+                        <input id="near_expiry_threshold_days" name="near_expiry_threshold_days" type="number" min="1" max="365" class="form-input" required value="7">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="description">Description (Optional)</label>
+                    <input id="description" name="description" type="text" class="form-input" maxlength="500" placeholder="Pasteurized toned milk pouch">
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="is_perishable" value="true" checked>
+                        Perishable Product (Require / Track Batch Expiry Dates)
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary">Create &amp; Enroll Product</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">Enroll Existing Organization SKU</h2>
+        </div>
+        <div class="card-body">
+            {% if unenrolled_org_products %}
+            <form method="post" action="{{ url_for('catalog.create_shop_product_action', shop_id=shop.id) }}" class="auth-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label class="form-label" for="enroll_product_id">Select Organization Product *</label>
+                    <select id="enroll_product_id" name="product_id" class="form-input" required>
+                        <option value="">-- Choose an Organization Product --</option>
+                        {% for org_prod in unenrolled_org_products %}
+                        <option value="{{ org_prod.id }}">{{ org_prod.sku }} — {{ org_prod.name }} ({{ org_prod.category }}, {{ org_prod.unit }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="enroll_purchase_price">Purchase Cost (INR) *</label>
+                        <input id="enroll_purchase_price" name="default_purchase_price" type="number" step="0.01" min="0" class="form-input" required value="20.00">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="enroll_selling_price">Selling Price (INR) *</label>
+                        <input id="enroll_selling_price" name="selling_price" type="number" step="0.01" min="0" class="form-input" required value="25.00">
+                    </div>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="enroll_reorder_level">Reorder Threshold *</label>
+                        <input id="enroll_reorder_level" name="reorder_level" type="number" min="0" class="form-input" required value="10">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="enroll_near_expiry_days">Near-Expiry Days *</label>
+                        <input id="enroll_near_expiry_days" name="near_expiry_threshold_days" type="number" min="1" max="365" class="form-input" required value="7">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-secondary">Enroll SKU in {{ shop.name }}</button>
+            </form>
+            {% else %}
+            <p class="empty-state">All active organization products are already enrolled in {{ shop.name }}, or no additional organization SKUs exist yet.</p>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endif %}
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Shop Product Catalog ({{ meta.total }} items)</h2>
+        <span class="text-muted">Page {{ meta.page }} of {{ meta.total_pages }}</span>
+    </div>
+    <div class="card-body">
+        {% if products %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Product Name</th>
+                        <th>Category / Unit</th>
+                        <th>Cost / Selling</th>
+                        <th>Sellable Stock</th>
+                        <th>Reorder Level</th>
+                        <th>Stock &amp; Expiry Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in products %}
+                    <tr>
+                        <td><code>{{ item.sku }}</code></td>
+                        <td>
+                            <strong>{{ item.name }}</strong>
+                            {% if not item.is_active %}
+                            <span class="badge-inactive">INACTIVE</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.category }} <span class="text-muted">({{ item.unit }})</span></td>
+                        <td>
+                            &#8377;{{ "%.2f"|format(item.default_purchase_price) }} /
+                            <strong>&#8377;{{ "%.2f"|format(item.selling_price) }}</strong>
+                        </td>
+                        <td>
+                            <strong>{{ item.available_qty }}</strong> {{ item.unit }}
+                            {% if item.expired_qty > 0 %}
+                            <div class="text-muted text-xs">Expired: {{ item.expired_qty }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.reorder_level }} {{ item.unit }}</td>
+                        <td>
+                            {% if item.is_out_of_stock %}
+                            <span class="badge-danger">OUT OF STOCK</span>
+                            {% elif item.is_low_stock %}
+                            <span class="badge-warning">LOW STOCK</span>
+                            {% else %}
+                            <span class="badge-active">HEALTHY</span>
+                            {% endif %}
+                            {% if item.has_near_expiry %}
+                            <span class="badge-warning">NEAR EXPIRY ({{ item.near_expiry_batch_count }})</span>
+                            {% endif %}
+                            {% if item.earliest_expiry_date %}
+                            <div class="text-muted text-xs">FEFO Exp: {{ item.earliest_expiry_date }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-cluster">
+                                <a href="{{ url_for('catalog.shop_product_detail_page', shop_id=shop.id, shop_product_id=item.shop_product_id) }}" class="btn btn-secondary btn-sm">Details</a>
+                                {% if shop.is_operational and item.is_active %}
+                                <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id, product_id=item.product_id) }}" class="btn btn-primary btn-sm">+ Batch</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if meta.total_pages > 1 %}
+        <div class="pagination-bar mt-3">
+            {% if meta.page > 1 %}
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('catalog.shop_products_page', shop_id=shop.id, page=meta.page - 1, q=search_query, category=category_filter, status=status_filter) }}">Previous</a>
+            {% endif %}
+            <span class="text-muted">Page {{ meta.page }} of {{ meta.total_pages }}</span>
+            {% if meta.page < meta.total_pages %}
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('catalog.shop_products_page', shop_id=shop.id, page=meta.page + 1, q=search_query, category=category_filter, status=status_filter) }}">Next</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="empty-state">No products matched your filter criteria in {{ shop.name }}.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

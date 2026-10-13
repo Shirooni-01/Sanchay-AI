@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}{{ shop.name }} &mdash; Shop Details &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ shop.name }} (<code>{{ shop.code }}</code>)</h1>
+        <p class="page-subtitle">
+            Organization: <strong>{{ organization.name }}</strong> &bull;
+            Your Effective Role: <span class="role-badge role-{{ (shop.my_assignment_role or user.role) | lower }}">{{ shop.my_assignment_role or user.role }}</span>
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Product Catalog</a>
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">Inventory &amp; Batches</a>
+        <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">&larr; Back to Shops</a>
+    </div>
+</div>
+
+<div class="landing-grid">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Store Profile &amp; Operational Status</h2>
+        </div>
+
+        <dl class="detail-list">
+            <div class="detail-row">
+                <dt>Shop ID</dt>
+                <dd><code>#{{ shop.id }}</code></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Internal Code</dt>
+                <dd><code>{{ shop.code }}</code></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Status</dt>
+                <dd>
+                    {% if shop.status == 'ACTIVE' %}
+                        <span class="badge-active">ACTIVE (Operational)</span>
+                    {% elif shop.status == 'SUSPENDED' %}
+                        <span class="badge-warning">SUSPENDED</span>
+                    {% else %}
+                        <span class="badge-inactive">{{ shop.status }}</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="detail-row">
+                <dt>Address</dt>
+                <dd>{{ shop.address }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>City &amp; Pincode</dt>
+                <dd>{{ shop.city }} &mdash; {{ shop.pincode }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Coordinates</dt>
+                <dd>
+                    {% if shop.latitude is not none and shop.longitude is not none %}
+                        <code>{{ shop.latitude }}, {{ shop.longitude }}</code>
+                    {% else %}
+                        <span class="text-muted">Not configured</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="detail-row">
+                <dt>Contact Phone</dt>
+                <dd>{{ shop.contact_phone }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Contact Email</dt>
+                <dd>{{ shop.contact_email or 'Not specified' }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Alert Thresholds</dt>
+                <dd>&le; {{ shop.low_stock_default_threshold }} units / {{ shop.near_expiry_days_threshold }} days</dd>
+            </div>
+        </dl>
+
+        {% if shop.peer_shops %}
+        <div style="margin-top: 1.5rem;">
+            <h3 style="font-size: 1rem; margin-bottom: 0.6rem;">Peer Active Shops in {{ organization.name }}</h3>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Shop Name</th>
+                            <th>City</th>
+                            <th>Distance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for peer in shop.peer_shops %}
+                        <tr>
+                            <td><code>{{ peer.code }}</code></td>
+                            <td>{{ peer.name }}</td>
+                            <td>{{ peer.city }}</td>
+                            <td>
+                                {% if peer.distance_km is not none %}
+                                    <strong>{{ peer.distance_km }} km</strong>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if can_manage_shop %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Edit Shop Details</h2>
+            <p class="card-subtitle">
+                {% if user.role == 'SUPER_ADMIN' %}
+                    Super Admin can edit all shop details and activate, deactivate, or suspend the shop.
+                {% else %}
+                    Shop Owner can update address, contact information, coordinates, and alert thresholds while the shop is ACTIVE.
+                {% endif %}
+            </p>
+        </div>
+
+        <form action="{{ url_for('admin.update_shop_action', shop_id=shop.id) }}" method="POST" class="stack-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="edit_name" class="form-label">Shop Name *</label>
+                    <input type="text" id="edit_name" name="name" class="form-input" value="{{ shop.name }}" required>
+                </div>
+                {% if user.role == 'SUPER_ADMIN' %}
+                <div class="form-group">
+                    <label for="edit_code" class="form-label">Shop Code *</label>
+                    <input type="text" id="edit_code" name="code" class="form-input" value="{{ shop.code }}" required>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="edit_address" class="form-label">Street Address *</label>
+                <input type="text" id="edit_address" name="address" class="form-input" value="{{ shop.address }}" required>
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="edit_city" class="form-label">City *</label>
+                    <input type="text" id="edit_city" name="city" class="form-input" value="{{ shop.city }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_pincode" class="form-label">Pincode *</label>
+                    <input type="text" id="edit_pincode" name="pincode" class="form-input" value="{{ shop.pincode }}" required>
+                </div>
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="edit_lat" class="form-label">Latitude</label>
+                    <input type="text" id="edit_lat" name="latitude" class="form-input" value="{{ shop.latitude if shop.latitude is not none else '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="edit_lon" class="form-label">Longitude</label>
+                    <input type="text" id="edit_lon" name="longitude" class="form-input" value="{{ shop.longitude if shop.longitude is not none else '' }}">
+                </div>
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="edit_phone" class="form-label">Contact Phone *</label>
+                    <input type="text" id="edit_phone" name="contact_phone" class="form-input" value="{{ shop.contact_phone }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_email" class="form-label">Contact Email</label>
+                    <input type="email" id="edit_email" name="contact_email" class="form-input" value="{{ shop.contact_email or '' }}">
+                </div>
+            </div>
+
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label for="edit_low_stock" class="form-label">Low-Stock Default Threshold</label>
+                    <input type="number" id="edit_low_stock" name="low_stock_default_threshold" class="form-input" value="{{ shop.low_stock_default_threshold }}" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_near_expiry" class="form-label">Near-Expiry Window (Days)</label>
+                    <input type="number" id="edit_near_expiry" name="near_expiry_days_threshold" class="form-input" value="{{ shop.near_expiry_days_threshold }}" min="1" required>
+                </div>
+            </div>
+
+            {% if user.role == 'SUPER_ADMIN' %}
+            <div class="form-group">
+                <label for="edit_status" class="form-label">Shop Status (Super Admin Only)</label>
+                <select id="edit_status" name="status" class="form-input">
+                    <option value="ACTIVE" {% if shop.status == 'ACTIVE' %}selected{% endif %}>ACTIVE (Operational)</option>
+                    <option value="INACTIVE" {% if shop.status == 'INACTIVE' %}selected{% endif %}>INACTIVE (Deactivated)</option>
+                    <option value="SUSPENDED" {% if shop.status == 'SUSPENDED' %}selected{% endif %}>SUSPENDED</option>
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Shop Updates</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+{% if can_manage_shop %}
+<section class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">Shop Personnel &amp; Role Assignments</h2>
+        <p class="card-subtitle">
+            Manage Shop Owners and Staff assigned to {{ shop.name }}.
+        </p>
+    </div>
+
+    {% if shop.assignments %}
+    <div class="table-responsive" style="margin-bottom: 1.5rem;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Shop Role</th>
+                    <th>Primary Shop</th>
+                    <th>Assignment Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in shop.assignments %}
+                <tr>
+                    <td><strong>{{ a.full_name }}</strong> (<code>{{ a.username }}</code>)</td>
+                    <td>{{ a.email }}</td>
+                    <td><span class="role-badge role-{{ a.assignment_role | lower }}">{{ a.assignment_role }}</span></td>
+                    <td>{{ 'Yes' if a.is_primary else 'No' }}</td>
+                    <td>
+                        {% if a.is_active %}
+                            <span class="badge-active">Active</span>
+                        {% else %}
+                            <span class="badge-inactive">Revoked</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.role == 'SUPER_ADMIN' or a.assignment_role == 'STAFF' %}
+                        <form action="{{ url_for('admin.update_shop_assignment_action', shop_id=shop.id, assignment_id=a.id) }}" method="POST" class="inline-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="is_active" value="{{ 'false' if a.is_active else 'true' }}">
+                            <button type="submit" class="btn btn-outline btn-sm">
+                                {{ 'Revoke Access' if a.is_active else 'Restore Access' }}
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-muted">Super Admin Managed</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state" style="margin-bottom: 1.25rem;">No personnel assigned to this shop yet.</p>
+    {% endif %}
+
+    {% if shop.status == 'ACTIVE' and assignable_users %}
+    <form action="{{ url_for('admin.assign_shop_member_action', shop_id=shop.id) }}" method="POST" class="filter-bar">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="assign_user_id" class="form-label">Select Organization User</label>
+            <select id="assign_user_id" name="user_id" class="form-input" required>
+                {% for u in assignable_users %}
+                    <option value="{{ u.id }}">{{ u.full_name }} ({{ u.username }} &bull; {{ u.role }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="assign_role" class="form-label">Shop Role</label>
+            <select id="assign_role" name="assignment_role" class="form-input" required>
+                <option value="STAFF">STAFF</option>
+                {% if user.role == 'SUPER_ADMIN' %}
+                    <option value="SHOP_OWNER">SHOP_OWNER</option>
+                {% endif %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="assign_primary" class="form-label">Primary Shop</label>
+            <select id="assign_primary" name="is_primary" class="form-input">
+                <option value="true">Yes (Primary)</option>
+                <option value="false">No (Secondary)</option>
+            </select>
+        </div>
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Assign to Shop</button>
+        </div>
+    </form>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

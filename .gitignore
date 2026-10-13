@@ -1,0 +1,103 @@
+# ============================================================================
+# Sanchay AI — Git Ignore Configuration
+# ============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+*.pyd
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Environment Variables & Secrets (NEVER COMMIT REAL SECRETS)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+*.pem
+*.key
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Flask & local runtime artifacts
+instance/
+.webassets-cache
+logs/
+*.log
+tmp/
+temp/
+exports/
+uploads/
+
+# Local SQLite or dump files (PostgreSQL is the required database; prevent accidental local DB commits)
+*.db
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.dump
+
+# AI Model Artifacts (Phase 8 only — store large binaries outside Git)
+models/*.pkl
+models/*.joblib
+models/*.bin
+models/*.onnx
+
+# Type checkers & linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+
+# IDEs and OS-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+Desktop.ini
+.DS_Store

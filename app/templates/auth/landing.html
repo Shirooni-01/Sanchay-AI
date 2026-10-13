@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Account &amp; Session &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<section class="landing-grid">
+    <div class="card">
+        <div class="card-header">
+            <div class="status-indicator">
+                <span class="status-dot status-online"></span>
+                <span>Authenticated Session Active</span>
+            </div>
+            <h1 class="card-title">Welcome, {{ user.full_name }}</h1>
+            <p class="card-subtitle">
+                Your session is authenticated via PostgreSQL-backed user verification and CSRF-protected cookies.
+            </p>
+        </div>
+
+        <dl class="detail-list">
+            <div class="detail-row">
+                <dt>User ID</dt>
+                <dd><code>#{{ user.id }}</code></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Username</dt>
+                <dd><code>{{ user.username }}</code></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Email</dt>
+                <dd>{{ user.email }}</dd>
+            </div>
+            <div class="detail-row">
+                <dt>Assigned Role</dt>
+                <dd><span class="role-badge role-{{ user.role | lower }}">{{ user.role }}</span></dd>
+            </div>
+            <div class="detail-row">
+                <dt>Organization</dt>
+                <dd>
+                    {% if user.organization %}
+                        {{ user.organization.name }} (<code>{{ user.organization.code }}</code>)
+                    {% else %}
+                        <span class="text-muted">Not linked</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="detail-row">
+                <dt>Account Status</dt>
+                <dd>
+                    {% if user.is_active %}
+                        <span class="badge-active">Active</span>
+                    {% else %}
+                        <span class="badge-inactive">Inactive</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="detail-row">
+                <dt>Last Login (UTC)</dt>
+                <dd>
+                    {% if user.last_login_at %}
+                        {{ user.last_login_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+                    {% else %}
+                        First session
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+
+        <div class="form-actions" style="margin-top: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <a href="{{ url_for('admin.dashboard_page') }}" class="btn btn-primary btn-sm">Open Role Dashboard</a>
+            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">View Accessible Shops</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Change Password</h2>
+            <p class="card-subtitle">
+                Updating your password immediately rotates your server-side session token.
+            </p>
+        </div>
+
+        <form action="{{ url_for('auth.change_password_action') }}" method="POST" class="stack-form" id="change-password-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="current_password" class="form-label">Current Password</label>
+                <input
+                    type="password"
+                    id="current_password"
+                    name="current_password"
+                    class="form-input"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="new_password" class="form-label">New Password</label>
+                <input
+                    type="password"
+                    id="new_password"
+                    name="new_password"
+                    class="form-input"
+                    placeholder="At least 8 chars, 1 uppercase, 1 lowercase, 1 digit"
+                    autocomplete="new-password"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password" class="form-label">Confirm New Password</label>
+                <input
+                    type="password"
+                    id="confirm_password"
+                    name="confirm_password"
+                    class="form-input"
+                    autocomplete="new-password"
+                    required
+                >
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Update Password</button>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

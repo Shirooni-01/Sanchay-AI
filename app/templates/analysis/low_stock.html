@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Low-Stock &amp; Replenishment Analysis &mdash; {{ shop.name }} &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+{% set page_heading = "Low-Stock & Replenishment Analysis" %}
+{% include "analysis/_header.html" %}
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="{{ url_for('analysis.low_stock_page', shop_id=shop.id) }}" class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; gap: 1rem;">
+        <input type="hidden" name="lookback_days" value="{{ analysis.configuration.lookback_days }}">
+        <input type="hidden" name="safety_stock_days" value="{{ analysis.configuration.safety_stock_days }}">
+        {% if analysis.configuration.safety_stock_qty_override is not none %}
+        <input type="hidden" name="safety_stock_qty" value="{{ analysis.configuration.safety_stock_qty_override }}">
+        {% endif %}
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="q">Search SKU / Product</label>
+            <input type="text" id="q" name="q" class="form-control" placeholder="Search SKU or product name" value="{{ search_q }}">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="status">Replenishment Status</label>
+            <select id="status" name="status" class="form-control">
+                <option value="">All Statuses</option>
+                <option value="OUT_OF_STOCK" {% if status_filter == 'OUT_OF_STOCK' %}selected{% endif %}>OUT_OF_STOCK</option>
+                <option value="LOW_STOCK" {% if status_filter == 'LOW_STOCK' %}selected{% endif %}>LOW_STOCK</option>
+                <option value="BELOW_SAFETY_STOCK" {% if status_filter == 'BELOW_SAFETY_STOCK' %}selected{% endif %}>BELOW_SAFETY_STOCK</option>
+                <option value="ADEQUATE" {% if status_filter == 'ADEQUATE' %}selected{% endif %}>ADEQUATE</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="show_all">Product Scope</label>
+            <select id="show_all" name="show_all" class="form-control">
+                <option value="0" {% if not show_all %}selected{% endif %}>Flagged Products Only</option>
+                <option value="1" {% if show_all %}selected{% endif %}>All Catalog Products ({{ analysis.kpis.total_catalog_products }})</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('analysis.low_stock_page', shop_id=shop.id, **query_params) }}" class="btn btn-outline">Reset</a>
+        </div>
+    </form>
+</div>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">Product Replenishment &amp; Safety Stock Evaluation ({{ items | length }})</h2>
+            <p class="card-subtitle">
+                Low-stock detection compares strictly available sellable quantity against each product's reorder threshold and dynamic safety stock floor.
+            </p>
+        </div>
+        <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">+ Receive New Stock Batch</a>
+    </div>
+
+    {% if items %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>SKU &amp; Product</th>
+                    <th>Sellable Qty</th>
+                    <th>Excluded (Rsv/Dmg/Exp)</th>
+                    <th>Reorder Threshold</th>
+                    <th>Safety Stock Floor</th>
+                    <th>Deficit Qty</th>
+                    <th>Rec. Replenishment</th>
+                    <th>Velocity &amp; Supply</th>
+                    <th>Status</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('analysis.product_analysis_page', shop_id=shop.id, product_id=item.product_id, **query_params) }}">
+                            <strong>{{ item.product_name }}</strong>
+                        </a>
+                        <div style="font-size: 0.78rem; color: #64748b;"><code>{{ item.sku }}</code> &bull; {{ item.category or 'Uncategorized' }}</div>
+                    </td>
+                    <td><strong>{{ item.sellable_qty }} {{ item.unit }}</strong></td>
+                    <td>{{ item.reserved_qty }} / {{ item.damaged_qty }} / {{ item.expired_qty }}</td>
+                    <td>{{ item.reorder_threshold }} {{ item.unit }}</td>
+                    <td>
+                        {{ item.min_retention_qty }} {{ item.unit }}
+                        <div style="font-size: 0.76rem; color: #64748b;">Safety: {{ item.safety_stock_qty }} {{ item.unit }}</div>
+                    </td>
+                    <td>
+                        {% if item.deficit_qty > 0 %}
+                            <strong style="color: #dc2626;">{{ item.deficit_qty }} {{ item.unit }}</strong>
+                        {% else %}
+                            0 {{ item.unit }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.recommended_replenishment_qty > 0 %}
+                            <strong style="color: #0284c7;">+{{ item.recommended_replenishment_qty }} {{ item.unit }}</strong>
+                        {% else %}
+                            0 {{ item.unit }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {{ "%.2f"|format(item.daily_sales_velocity) }} {{ item.unit }}/d
+                        <div style="font-size: 0.76rem; color: #64748b;">
+                            {% if item.days_of_supply is not none %}{{ item.days_of_supply }}d supply{% else %}No velocity{% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if item.replenishment_status == 'OUT_OF_STOCK' %}
+                            <span class="badge-inactive">OUT OF STOCK</span>
+                        {% elif item.replenishment_status == 'LOW_STOCK' %}
+                            <span class="badge-warning">LOW STOCK</span>
+                        {% elif item.replenishment_status == 'BELOW_SAFETY_STOCK' %}
+                            <span class="badge-warning">BELOW SAFETY</span>
+                        {% else %}
+                            <span class="badge-active">ADEQUATE</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('analysis.product_analysis_page', shop_id=shop.id, product_id=item.product_id, **query_params) }}" class="btn btn-outline btn-sm">Inspect</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="10" style="background: #f8fafc; font-size: 0.83rem; color: #334155; padding: 0.5rem 1rem;">
+                        <strong>Rule Reason:</strong> {{ item.reason }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">No products are currently below their reorder threshold or safety stock floor.</p>
+    {% endif %}
+</section>
+{% endblock %}

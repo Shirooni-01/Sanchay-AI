@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<section class="auth-wrapper">
+    <div class="card auth-card">
+        <div class="card-header">
+            <h1 class="card-title">Sign In to Sanchay AI</h1>
+            <p class="card-subtitle">Enter your organization username or email and password to continue.</p>
+        </div>
+
+        <form action="{{ url_for('auth.login_page') }}" method="POST" class="stack-form" novalidate id="login-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if request.args.get('next') %}
+            <input type="hidden" name="next" value="{{ request.args.get('next') }}">
+            {% endif %}
+
+            <div class="form-group">
+                <label for="identifier" class="form-label">Username or Email</label>
+                <input
+                    type="text"
+                    id="identifier"
+                    name="identifier"
+                    class="form-input"
+                    value="{{ identifier | default('', true) }}"
+                    placeholder="e.g. admin_user or user@sanchay.local"
+                    autocomplete="username"
+                    maxlength="150"
+                    required
+                    autofocus
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="form-label">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    class="form-input"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                    maxlength="256"
+                    required
+                >
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-block" id="login-submit-btn">
+                    Sign In
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

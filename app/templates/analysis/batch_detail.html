@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Analysis: {{ batch.batch_code }} &mdash; {{ shop.name }} &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Batch FEFO &amp; Expiry-Risk Analysis: <code>{{ batch.batch_code }}</code></h1>
+        <p class="page-subtitle">
+            Product: <a href="{{ url_for('analysis.product_analysis_page', shop_id=shop.id, product_id=batch.product_id, **query_params) }}"><strong>{{ batch.product_name }}</strong></a> (<code>{{ batch.sku }}</code>) &bull;
+            Shop: <strong>{{ shop.name }}</strong> &bull;
+            Rule Version: <code>{{ result.rule_version }}</code>
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('analysis.expiry_risk_page', shop_id=shop.id, **query_params) }}" class="btn btn-outline btn-sm">&larr; Expiry-Risk List</a>
+        <a href="{{ url_for('analysis.product_analysis_page', shop_id=shop.id, product_id=batch.product_id, **query_params) }}" class="btn btn-outline btn-sm">Product Analysis</a>
+        <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=batch.batch_id) }}" class="btn btn-primary btn-sm">Open Batch Ledger</a>
+    </div>
+</div>
+
+<section class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <span class="stat-label">Batch Stock &amp; FEFO Position</span>
+        <strong class="stat-value">{{ batch.eligible_sellable_qty }} {{ batch.unit }} sellable</strong>
+        <span class="stat-meta">
+            FEFO Rank: <strong>{% if batch.fefo_rank %}#{{ batch.fefo_rank }}{% else %}N/A ({{ batch.status }}){% endif %}</strong>
+            <br>Excluded: {{ batch.reserved_qty_excluded }} Rsv / {{ batch.damaged_qty_excluded }} Dmg / {{ batch.expired_qty_excluded }} Exp
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Expiry Timeline</span>
+        <strong class="stat-value">
+            {% if batch.days_to_expiry is not none %}{{ batch.days_to_expiry }} day(s){% else %}Non-Perishable{% endif %}
+        </strong>
+        <span class="stat-meta">
+            Expiry Date: <strong>{{ batch.expiry_date or 'None' }}</strong>
+            <br>Near-Expiry Threshold: {{ batch.near_expiry_threshold_days }} days
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">FEFO Demand &amp; Unsold Projection</span>
+        <strong class="stat-value">
+            {% if batch.estimated_unsold_at_expiry_qty is not none %}
+                {{ batch.estimated_unsold_at_expiry_qty }} {{ batch.unit }} unsold
+            {% else %}
+                Unverified
+            {% endif %}
+        </strong>
+        <span class="stat-meta">
+            Earlier FEFO Stock: {{ batch.earlier_batches_sellable_qty }} {{ batch.unit }}
+            <br>Est. Batch Demand: {{ batch.estimated_batch_demand_before_expiry if batch.estimated_batch_demand_before_expiry is not none else 'N/A' }} {{ batch.unit }}
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Surplus &amp; Retention Result</span>
+        <strong class="stat-value" style="color: #0284c7;">{{ batch.potential_surplus_qty }} {{ batch.unit }} surplus</strong>
+        <span class="stat-meta">
+            Retained in Batch: {{ batch.retained_qty }} {{ batch.unit }}
+            <br>Risk Level: <code>{{ batch.expiry_risk_level }}</code>
+        </span>
+    </div>
+</section>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">Deterministic Rule Explanation</h2>
+    </div>
+    <p style="font-size: 0.95rem; color: #0f172a; margin-bottom: 1rem;">{{ batch.explanation }}</p>
+
+    <div class="table-responsive">
+        <table class="data-table">
+            <tbody>
+                <tr>
+                    <th>Batch Code / Status</th>
+                    <td><code>{{ batch.batch_code }}</code> ({{ batch.status }})</td>
+                    <th>Daily Sales Velocity</th>
+                    <td>{{ "%.4f"|format(batch.daily_sales_velocity) }} {{ batch.unit }}/day (<code>{{ batch.history_status }}</code>)</td>
+                </tr>
+                <tr>
+                    <th>Initial / Available / Sellable Qty</th>
+                    <td>{{ batch.initial_qty }} / {{ batch.available_qty }} / <strong>{{ batch.eligible_sellable_qty }} {{ batch.unit }}</strong></td>
+                    <th>Earlier FEFO Batches Sellable Qty</th>
+                    <td>{{ batch.earlier_batches_sellable_qty }} {{ batch.unit }}</td>
+                </tr>
+                <tr>
+                    <th>Product Demand Before Expiry</th>
+                    <td>{{ batch.estimated_product_demand_before_expiry if batch.estimated_product_demand_before_expiry is not none else 'N/A' }} {{ batch.unit }}</td>
+                    <th>Batch Demand After Earlier Batches</th>
+                    <td>{{ batch.estimated_batch_demand_before_expiry if batch.estimated_batch_demand_before_expiry is not none else 'N/A' }} {{ batch.unit }}</td>
+                </tr>
+                <tr>
+                    <th>Reorder / Safety Stock Floor</th>
+                    <td>Reorder: {{ batch.reorder_threshold }} {{ batch.unit }} | Safety: {{ batch.safety_stock_qty }} {{ batch.unit }}</td>
+                    <th>Required Cumulative Retention</th>
+                    <td>{{ batch.required_cumulative_retention_qty if batch.required_cumulative_retention_qty is not none else 'N/A' }} {{ batch.unit }}</td>
+                </tr>
+                <tr>
+                    <th>Retained in This Batch</th>
+                    <td>{{ batch.retained_qty }} {{ batch.unit }}</td>
+                    <th>Potential Surplus Qty</th>
+                    <td><strong style="color: #0284c7;">{{ batch.potential_surplus_qty }} {{ batch.unit }}</strong> (<code>{{ batch.surplus_reason }}</code>)</td>
+                </tr>
+                <tr>
+                    <th>At-Risk Cost / Retail Value</th>
+                    <td>&#8377;{{ "%.2f"|format(batch.at_risk_cost_value) }} / &#8377;{{ "%.2f"|format(batch.at_risk_retail_value) }}</td>
+                    <th>Surplus Cost / Retail Value</th>
+                    <td>&#8377;{{ "%.2f"|format(batch.surplus_cost_value) }} / &#8377;{{ "%.2f"|format(batch.surplus_retail_value) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

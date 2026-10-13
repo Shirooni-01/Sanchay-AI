@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Potential Surplus Analysis &mdash; {{ shop.name }} &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+{% set page_heading = "Potential Surplus Stock Analysis" %}
+{% include "analysis/_header.html" %}
+
+<div class="alert alert-info" role="region" aria-label="Phase 5 Read-Only Boundary Notice" style="margin-bottom: 1.25rem;">
+    <strong>Read-Only Surplus Identification (Phase 5):</strong>
+    Surplus calculations enforce your shop's retention floor (<code>max(reorder_threshold, safety_stock_qty)</code>) and deduct earlier-expiring FEFO batches so units are never double-counted. Running this analysis does <strong>not</strong> reserve, transfer, or deduct stock. Inter-store stock transfer offers and dual-owner approvals are part of Phase 6.
+</div>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="{{ url_for('analysis.surplus_page', shop_id=shop.id) }}" class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; gap: 1rem;">
+        <input type="hidden" name="lookback_days" value="{{ analysis.configuration.lookback_days }}">
+        <input type="hidden" name="safety_stock_days" value="{{ analysis.configuration.safety_stock_days }}">
+        {% if analysis.configuration.safety_stock_qty_override is not none %}
+        <input type="hidden" name="safety_stock_qty" value="{{ analysis.configuration.safety_stock_qty_override }}">
+        {% endif %}
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="q">Search Batch / SKU / Product</label>
+            <input type="text" id="q" name="q" class="form-control" placeholder="Search SKU, product, or batch code" value="{{ search_q }}">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="show_all">Batch Display Scope</label>
+            <select id="show_all" name="show_all" class="form-control">
+                <option value="0" {% if not show_all_batches %}selected{% endif %}>Surplus Candidates Only ({{ analysis.kpis.surplus_batches_count }})</option>
+                <option value="1" {% if show_all_batches %}selected{% endif %}>All Batches Including Zero-Surplus ({{ analysis.kpis.total_batches_analyzed }})</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('analysis.surplus_page', shop_id=shop.id, **query_params) }}" class="btn btn-outline">Reset</a>
+        </div>
+    </form>
+</div>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">Batch-Level Surplus &amp; Retention Breakdown ({{ batches | length }})</h2>
+            <p class="card-subtitle">
+                Total Potential Surplus: <strong>{{ analysis.kpis.total_potential_surplus_units }} units</strong> across {{ analysis.kpis.surplus_batches_count }} batch(es) (Estimated Cost Value: <strong>&#8377;{{ "%.2f"|format(analysis.kpis.total_surplus_cost_value) }}</strong>).
+            </p>
+        </div>
+    </div>
+
+    {% if batches %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Batch &amp; FEFO</th>
+                    <th>Product</th>
+                    <th>Expiry</th>
+                    <th>Sellable Qty</th>
+                    <th>Reorder / Safety Floor</th>
+                    <th>Cumulative Retention</th>
+                    <th>Retained in Batch</th>
+                    <th>Potential Surplus</th>
+                    <th>Surplus Reason</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in batches %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('analysis.batch_analysis_page', shop_id=shop.id, batch_id=b.batch_id, **query_params) }}">
+                            <strong><code>{{ b.batch_code }}</code></strong>
+                        </a>
+                        <div style="font-size: 0.78rem; color: #64748b;">
+                            {% if b.fefo_rank %}FEFO #{{ b.fefo_rank }}{% else %}{{ b.status }}{% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('analysis.product_analysis_page', shop_id=shop.id, product_id=b.product_id, **query_params) }}">
+                            <strong>{{ b.product_name }}</strong>
+                        </a>
+                        <div style="font-size: 0.78rem; color: #64748b;"><code>{{ b.sku }}</code></div>
+                    </td>
+                    <td>
+                        {% if b.expiry_date %}
+                            {{ b.expiry_date }}
+                            <div style="font-size: 0.78rem; color: #64748b;">{{ b.days_to_expiry }}d left</div>
+                        {% else %}
+                            Non-Perishable
+                        {% endif %}
+                    </td>
+                    <td>{{ b.eligible_sellable_qty }} {{ b.unit }}</td>
+                    <td>
+                        Reorder: {{ b.reorder_threshold }} {{ b.unit }}
+                        <div style="font-size: 0.76rem; color: #64748b;">Safety: {{ b.safety_stock_qty }} {{ b.unit }}</div>
+                    </td>
+                    <td>
+                        {% if b.required_cumulative_retention_qty is not none %}
+                            {{ b.required_cumulative_retention_qty }} {{ b.unit }}
+                            <div style="font-size: 0.76rem; color: #64748b;">Earlier Retained: {{ b.earlier_batches_retained_qty }}</div>
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td>{{ b.retained_qty }} {{ b.unit }}</td>
+                    <td>
+                        {% if b.potential_surplus_qty > 0 %}
+                            <strong style="color: #0284c7; font-size: 1rem;">{{ b.potential_surplus_qty }} {{ b.unit }}</strong>
+                            <div style="font-size: 0.76rem; color: #64748b;">&#8377;{{ "%.2f"|format(b.surplus_cost_value) }} cost</div>
+                        {% else %}
+                            <span>0 {{ b.unit }}</span>
+                        {% endif %}
+                    </td>
+                    <td><code>{{ b.surplus_reason }}</code></td>
+                    <td>
+                        <a href="{{ url_for('analysis.batch_analysis_page', shop_id=shop.id, batch_id=b.batch_id, **query_params) }}" class="btn btn-outline btn-sm">Inspect</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="10" style="background: #f8fafc; font-size: 0.83rem; color: #334155; padding: 0.5rem 1rem;">
+                        <strong>Calculation Explanation:</strong> {{ b.explanation }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">No surplus candidates found under current demand and safety-stock parameters.</p>
+    {% endif %}
+</section>
+{% endblock %}

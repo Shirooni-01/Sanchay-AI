@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Rule-Based Recommendations &mdash; {{ shop.name }} &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+{% set page_heading = "Rule-Based Recommendations & Explanations" %}
+{% include "analysis/_header.html" %}
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="{{ url_for('analysis.recommendations_page', shop_id=shop.id) }}" class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; gap: 1rem;">
+        <input type="hidden" name="lookback_days" value="{{ analysis.configuration.lookback_days }}">
+        <input type="hidden" name="safety_stock_days" value="{{ analysis.configuration.safety_stock_days }}">
+        {% if analysis.configuration.safety_stock_qty_override is not none %}
+        <input type="hidden" name="safety_stock_qty" value="{{ analysis.configuration.safety_stock_qty_override }}">
+        {% endif %}
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="type">Recommendation Type</label>
+            <select id="type" name="type" class="form-control">
+                <option value="">All Types</option>
+                {% for t in valid_rec_types %}
+                <option value="{{ t }}" {% if type_filter == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="severity">Severity</label>
+            <select id="severity" name="severity" class="form-control">
+                <option value="">All Severities</option>
+                <option value="CRITICAL" {% if severity_filter == 'CRITICAL' %}selected{% endif %}>CRITICAL</option>
+                <option value="WARNING" {% if severity_filter == 'WARNING' %}selected{% endif %}>WARNING</option>
+                <option value="INFO" {% if severity_filter == 'INFO' %}selected{% endif %}>INFO</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary">Filter Recommendations</button>
+            <a href="{{ url_for('analysis.recommendations_page', shop_id=shop.id, **query_params) }}" class="btn btn-outline">Reset</a>
+        </div>
+    </form>
+</div>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">Active Deduplicated Recommendations ({{ recommendations | length }})</h2>
+            <p class="card-subtitle">
+                Every recommendation is keyed by a deterministic <code>recommendation_key</code>, backed by PostgreSQL values, and stamped with rule version <code>{{ analysis.rule_version }}</code>.
+            </p>
+        </div>
+    </div>
+
+    {% if recommendations %}
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+        {% for r in recommendations %}
+        <article class="card" style="border-left: 4px solid {% if r.severity == 'CRITICAL' %}#dc2626{% elif r.severity == 'WARNING' %}#d97706{% else %}#0284c7{% endif %}; padding: 1rem 1.25rem;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div>
+                    {% if r.severity == 'CRITICAL' %}
+                        <span class="badge-inactive">CRITICAL</span>
+                    {% elif r.severity == 'WARNING' %}
+                        <span class="badge-warning">WARNING</span>
+                    {% else %}
+                        <span class="badge-active">INFO</span>
+                    {% endif %}
+                    <code style="margin-left: 0.4rem;">{{ r.recommendation_type }}</code>
+                    <strong style="margin-left: 0.5rem; font-size: 1.02rem;">{{ r.title }}</strong>
+                </div>
+                <div style="font-size: 0.8rem; color: #64748b;">
+                    Key: <code>{{ r.recommendation_key }}</code> &bull;
+                    Rule: <code>{{ r.rule_version }}</code> &bull;
+                    Analyzed: <code>{{ r.analyzed_at[:19] | replace('T', ' ') }} UTC</code>
+                </div>
+            </div>
+
+            <p style="margin: 0.35rem 0; color: #0f172a;"><strong>Reason:</strong> {{ r.reason }}</p>
+            <p style="margin: 0.25rem 0 0.75rem 0; font-size: 0.88rem; color: #334155;"><strong>Detailed Explanation:</strong> {{ r.explanation }}</p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0.75rem; background: #f8fafc; padding: 0.75rem 1rem; border-radius: 6px; font-size: 0.82rem;">
+                <div>
+                    <strong>Relevant Database Values:</strong>
+                    <ul style="margin: 0.35rem 0 0 1.1rem; padding: 0;">
+                        {% for k, v in r.relevant_values.items() %}
+                        <li><code>{{ k }}</code>: <strong>{{ v }}</strong></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div>
+                    <strong>Calculation Assumptions:</strong>
+                    <ul style="margin: 0.35rem 0 0 1.1rem; padding: 0;">
+                        {% for k, v in r.calculation_assumptions.items() %}
+                        <li><code>{{ k }}</code>: {{ v }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                {% if r.product_id %}
+                <a href="{{ url_for('analysis.product_analysis_page', shop_id=shop.id, product_id=r.product_id, **query_params) }}" class="btn btn-outline btn-sm">Inspect Product ({{ r.sku }})</a>
+                {% endif %}
+                {% if r.batch_id %}
+                <a href="{{ url_for('analysis.batch_analysis_page', shop_id=shop.id, batch_id=r.batch_id, **query_params) }}" class="btn btn-outline btn-sm">Inspect Batch ({{ r.batch_code }})</a>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">No recommendations match the current filter criteria.</p>
+    {% endif %}
+</section>
+{% endblock %}

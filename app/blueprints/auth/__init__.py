@@ -1,0 +1,5 @@
+"""Authentication and Phase 1 landing blueprint."""
+
+from app.blueprints.auth.routes import auth_bp
+
+__all__ = ["auth_bp"]

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Product Analysis: {{ product.sku }} &mdash; {{ shop.name }} &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Product Stock Analysis: {{ product.product_name }} (<code>{{ product.sku }}</code>)</h1>
+        <p class="page-subtitle">
+            Shop: <strong>{{ shop.name }}</strong> (<code>{{ shop.code }}</code>) &bull;
+            Rule Version: <code>{{ result.rule_version }}</code> &bull;
+            Business Date: <strong>{{ result.business_date }}</strong> &bull;
+            Analyzed: <code>{{ result.analyzed_at[:19] | replace('T', ' ') }} UTC</code>
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('analysis.overview_page', shop_id=shop.id, **query_params) }}" class="btn btn-outline btn-sm">&larr; Analysis Overview</a>
+        <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">+ Receive Batch</a>
+    </div>
+</div>
+
+<section class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <span class="stat-label">Sellable &amp; Excluded Stock</span>
+        <strong class="stat-value">{{ product.stock_summary.sellable_qty }} {{ product.unit }}</strong>
+        <span class="stat-meta">
+            Physical On-Hand: {{ product.stock_summary.physical_on_hand_qty }} {{ product.unit }}
+            <br>Excluded: {{ product.stock_summary.reserved_qty }} Rsv / {{ product.stock_summary.damaged_qty }} Dmg / {{ product.stock_summary.expired_qty }} Exp
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Sales Velocity ({{ product.sales_history.lookback_days }}d Window)</span>
+        <strong class="stat-value">{{ "%.4f"|format(product.sales_history.daily_sales_velocity) }} {{ product.unit }}/day</strong>
+        <span class="stat-meta">
+            Net Sold: {{ product.sales_history.net_units_sold }} (Gross {{ product.sales_history.gross_units_sold }} - {{ product.sales_history.returned_units }} Ret)
+            <br>History: <code>{{ product.sales_history.history_status }}</code> ({{ product.sales_history.demand_confidence }})
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Retention &amp; Safety Floor</span>
+        <strong class="stat-value">{{ product.thresholds.min_product_retention_qty }} {{ product.unit }}</strong>
+        <span class="stat-meta">
+            Reorder Threshold: {{ product.thresholds.reorder_threshold }} {{ product.unit }}
+            <br>Safety Stock ({{ product.thresholds.safety_stock_days }}d): {{ product.thresholds.safety_stock_qty }} {{ product.unit }}
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Surplus &amp; Expiry Exposure</span>
+        <strong class="stat-value" style="color: #0284c7;">{{ product.stock_summary.potential_surplus_qty }} {{ product.unit }} surplus</strong>
+        <span class="stat-meta">
+            Retained by Shop: {{ product.stock_summary.retained_qty }} {{ product.unit }}
+            <br>Est. Unsold at Expiry: {{ product.stock_summary.estimated_unsold_at_expiry_qty }} {{ product.unit }}
+        </span>
+    </div>
+</section>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">Sales Velocity &amp; Replenishment Assessment</h2>
+    </div>
+    <p style="margin-bottom: 0.5rem;"><strong>Sales History Assessment:</strong> {{ product.sales_history.history_explanation }}</p>
+    <p style="margin-bottom: 0;"><strong>Replenishment Assessment (<code>{{ product.low_stock_analysis.replenishment_status }}</code>):</strong> {{ product.low_stock_analysis.reason }}</p>
+</div>
+
+<section class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">FEFO Batch Queue &amp; Surplus Breakdown ({{ product.batches | length }} Batches)</h2>
+        <p class="card-subtitle">Batches are ordered by earliest expiry date first (FEFO). Demand and retention are allocated sequentially without double-counting.</p>
+    </div>
+    {% if product.batches %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>FEFO Rank</th>
+                    <th>Batch Code</th>
+                    <th>Expiry &amp; Days Left</th>
+                    <th>Sellable (Rsv/Dmg/Exp)</th>
+                    <th>Earlier Sellable</th>
+                    <th>Est. Batch Demand</th>
+                    <th>Est. Unsold</th>
+                    <th>Retained Qty</th>
+                    <th>Potential Surplus</th>
+                    <th>Risk Level</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in product.batches %}
+                <tr>
+                    <td>{% if b.fefo_rank %}<strong>#{{ b.fefo_rank }}</strong>{% else %}&mdash;{% endif %}</td>
+                    <td>
+                        <a href="{{ url_for('analysis.batch_analysis_page', shop_id=shop.id, batch_id=b.batch_id, **query_params) }}">
+                            <code>{{ b.batch_code }}</code>
+                        </a>
+                    </td>
+                    <td>
+                        {% if b.expiry_date %}
+                            {{ b.expiry_date }} ({{ b.days_to_expiry }}d)
+                        {% else %}
+                            Non-Perishable
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ b.eligible_sellable_qty }}</strong>
+                        <span style="font-size: 0.78rem; color: #64748b;">({{ b.reserved_qty_excluded }}/{{ b.damaged_qty_excluded }}/{{ b.expired_qty_excluded }})</span>
+                    </td>
+                    <td>{{ b.earlier_batches_sellable_qty }}</td>
+                    <td>{{ b.estimated_batch_demand_before_expiry if b.estimated_batch_demand_before_expiry is not none else 'N/A' }}</td>
+                    <td>{{ b.estimated_unsold_at_expiry_qty if b.estimated_unsold_at_expiry_qty is not none else 'Unverified' }}</td>
+                    <td>{{ b.retained_qty }}</td>
+                    <td><strong style="color: #0284c7;">{{ b.potential_surplus_qty }}</strong></td>
+                    <td>
+                        {% if b.expiry_risk_level in ('EXPIRED', 'CRITICAL') %}
+                            <span class="badge-inactive">{{ b.expiry_risk_level }}</span>
+                        {% elif b.expiry_risk_level in ('HIGH', 'MEDIUM', 'INSUFFICIENT_DATA') %}
+                            <span class="badge-warning">{{ b.expiry_risk_level }}</span>
+                        {% else %}
+                            <span class="badge-active">{{ b.expiry_risk_level }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="10" style="background: #f8fafc; font-size: 0.83rem; color: #334155;">
+                        {{ b.explanation }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">No inventory batches exist for this product in {{ shop.name }}.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2 class="card-title">Product Recommendations ({{ product.recommendations | length }})</h2>
+    </div>
+    {% if product.recommendations %}
+    <ul style="margin: 0; padding-left: 1.25rem;">
+        {% for r in product.recommendations %}
+        <li style="margin-bottom: 0.65rem;">
+            <strong>[{{ r.severity }} &bull; <code>{{ r.recommendation_type }}</code>] {{ r.title }}:</strong>
+            {{ r.reason }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty-state">No active recommendations for this product.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Low-Stock &amp; Out-of-Stock Alerts — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Low-Stock &amp; Out-of-Stock Alerts — {{ shop.name }} ({{ shop.code }})</h1>
+        <p class="page-subtitle">
+            Deterministic comparison of non-expired sellable stock (<code>available_qty</code>) against each product's configured <code>reorder_level</code>.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">&larr; Inventory Overview</a>
+        {% if can_receive_stock %}
+        <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">Receive Batch Stock</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="subnav-tabs mb-4">
+    <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="subnav-tab">Overview</a>
+    <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="subnav-tab">Product Catalog</a>
+    <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="subnav-tab">Batches (FEFO)</a>
+    <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="subnav-tab">Receive Stock</a>
+    <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="subnav-tab active">Low Stock Alerts</a>
+    <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Expiry Alerts</a>
+    <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="subnav-tab">Stock Ledger</a>
+</div>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Products Below or At Reorder Threshold ({{ alerts.low_stock_items|length }} SKUs)</h2>
+        <span class="text-muted">Out of Stock: {{ alerts.kpis.out_of_stock_count }} | Low Stock: {{ alerts.kpis.low_stock_count }}</span>
+    </div>
+    <div class="card-body">
+        {% if alerts.low_stock_items %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Product Name</th>
+                        <th>Category</th>
+                        <th>Sellable Available Qty</th>
+                        <th>Reorder Threshold</th>
+                        <th>Deficit to Threshold</th>
+                        <th>Severity</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in alerts.low_stock_items %}
+                    <tr>
+                        <td><code>{{ item.product_sku }}</code></td>
+                        <td><strong>{{ item.product_name }}</strong></td>
+                        <td>{{ item.category }}</td>
+                        <td><strong>{{ item.available_qty }}</strong> {{ item.unit }}</td>
+                        <td>{{ item.reorder_level }} {{ item.unit }}</td>
+                        <td>{{ item.deficit_qty }} {{ item.unit }}</td>
+                        <td>
+                            {% if item.severity == 'OUT_OF_STOCK' %}
+                            <span class="badge-danger">OUT OF STOCK</span>
+                            {% else %}
+                            <span class="badge-warning">LOW STOCK</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-cluster">
+                                <a href="{{ url_for('catalog.shop_product_detail_page', shop_id=shop.id, shop_product_id=item.shop_product_id) }}" class="btn btn-secondary btn-sm">Product</a>
+                                {% if can_receive_stock %}
+                                <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id, product_id=item.product_id) }}" class="btn btn-primary btn-sm">+ Receive Batch</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">All active products in {{ shop.name }} have healthy sellable stock above their reorder thresholds.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

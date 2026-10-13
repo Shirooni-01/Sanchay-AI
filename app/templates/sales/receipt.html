@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Receipt {{ sale.invoice_number }} &mdash; {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header no-print">
+    <div>
+        <h1 class="page-title">Printable Customer Receipt</h1>
+        <p class="page-subtitle">Receipt Number: <code>{{ sale.invoice_number }}</code></p>
+    </div>
+    <div class="header-actions">
+        <button type="button" id="print-receipt-btn" class="btn btn-primary btn-sm">Print Receipt</button>
+        <a href="{{ url_for('sales.sale_detail_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-outline btn-sm">Invoice Details &amp; Returns</a>
+        <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">+ New POS Sale</a>
+    </div>
+</div>
+
+<section class="card receipt-sheet" style="max-width: 720px; margin: 0 auto;">
+    <div class="card-body">
+        <div style="text-align: center; border-bottom: 2px dashed #cbd5e1; padding-bottom: 1rem; margin-bottom: 1rem;">
+            <h2 style="margin: 0 0 0.25rem 0;">{{ shop.name }}</h2>
+            <p class="text-muted" style="margin: 0;">
+                {{ shop.address }}, {{ shop.city }} &mdash; {{ shop.pincode }}<br>
+                Shop Code: <code>{{ shop.code }}</code>
+                {% if shop.contact_phone %} &bull; Tel: {{ shop.contact_phone }}{% endif %}
+            </p>
+        </div>
+
+        <div class="grid-2-col" style="margin-bottom: 1rem; font-size: 0.92rem;">
+            <div>
+                <div><strong>Receipt Number:</strong> <code>{{ sale.invoice_number }}</code></div>
+                <div><strong>Date &amp; Time:</strong> {{ sale.created_at[:19].replace('T', ' ') if sale.created_at else '' }} UTC</div>
+                <div><strong>Status:</strong> <code>{{ sale.status }}</code></div>
+            </div>
+            <div>
+                <div><strong>Customer:</strong> {{ sale.customer_name or 'Walk-in Customer' }}</div>
+                {% if sale.customer_phone %}
+                <div><strong>Customer Phone:</strong> {{ sale.customer_phone }}</div>
+                {% endif %}
+                <div><strong>Payment Method:</strong> <code>{{ sale.payment_mode }}</code></div>
+                <div><strong>Cashier:</strong> {{ sale.sold_by_name }}</div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Item Description &amp; Batch</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Discount</th>
+                        <th>Line Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sale.allocations %}
+                    <tr>
+                        <td>
+                            <strong>{{ item.product_name }}</strong> (<code>{{ item.sku }}</code>)
+                            <div class="text-muted text-xs">
+                                Batch: <code>{{ item.batch_code }}</code>
+                                {% if item.expiry_date %} &bull; Exp: {{ item.expiry_date }}{% endif %}
+                            </div>
+                        </td>
+                        <td>{{ item.quantity }} {{ item.unit }}</td>
+                        <td>&#8377;{{ "%.2f"|format(item.unit_selling_price) }}</td>
+                        <td>&#8377;{{ "%.2f"|format(item.line_discount) }}</td>
+                        <td><strong>&#8377;{{ "%.2f"|format(item.line_total) }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div style="border-top: 2px dashed #cbd5e1; margin-top: 1rem; padding-top: 1rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                <span>Subtotal:</span>
+                <strong>&#8377;{{ "%.2f"|format(sale.subtotal_amount) }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                <span>Approved Discount:</span>
+                <strong>&#8377;{{ "%.2f"|format(sale.discount_amount) }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 1.2rem; margin-top: 0.5rem;">
+                <strong>Final Amount:</strong>
+                <strong>&#8377;{{ "%.2f"|format(sale.total_amount) }}</strong>
+            </div>
+            {% if sale.returned_amount > 0 %}
+            <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; color: #b91c1c;">
+                <span>Returned / Refunded Amount:</span>
+                <strong>-&#8377;{{ "%.2f"|format(sale.returned_amount) }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.25rem;">
+                <strong>Net Paid Amount:</strong>
+                <strong>&#8377;{{ "%.2f"|format(sale.net_revenue_amount) }}</strong>
+            </div>
+            {% endif %}
+        </div>
+
+        <p class="text-muted text-xs" style="text-align: center; margin-top: 1.25rem;">
+            Thank you for shopping at {{ shop.name }}. Batch codes are printed above for quality &amp; return traceability.
+        </p>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pos.js') }}"></script>
+{% endblock %}

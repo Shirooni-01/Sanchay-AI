@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Shops Directory &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Shops in {{ organization.name }}</h1>
+        <p class="page-subtitle">
+            View, search, filter, and manage store locations within your authorized scope.
+        </p>
+    </div>
+</div>
+
+<section class="card" style="margin-bottom: 1.5rem;">
+    <form action="{{ url_for('admin.shops_page') }}" method="GET" class="filter-bar">
+        <div class="form-group">
+            <label for="search" class="form-label">Search (Name, Code, City, Pincode)</label>
+            <input type="text" id="search" name="search" class="form-input" value="{{ search_query }}" placeholder="Search shops...">
+        </div>
+        <div class="form-group">
+            <label for="status" class="form-label">Status</label>
+            <select id="status" name="status" class="form-input">
+                <option value="">All Statuses</option>
+                <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>ACTIVE</option>
+                <option value="INACTIVE" {% if status_filter == 'INACTIVE' %}selected{% endif %}>INACTIVE</option>
+                <option value="SUSPENDED" {% if status_filter == 'SUSPENDED' %}selected{% endif %}>SUSPENDED</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="city" class="form-label">City</label>
+            <input type="text" id="city" name="city" class="form-input" value="{{ city_filter }}" placeholder="Filter by city">
+        </div>
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Apply Filters</button>
+            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">Reset</a>
+        </div>
+    </form>
+</section>
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">Accessible Shops ({{ shops | length }})</h2>
+    </div>
+
+    {% if shops %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Shop Name</th>
+                    <th>City &amp; Pincode</th>
+                    <th>Coordinates</th>
+                    <th>Contact</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for shop in shops %}
+                <tr>
+                    <td><code>{{ shop.code }}</code></td>
+                    <td><strong>{{ shop.name }}</strong></td>
+                    <td>{{ shop.city }} &bull; {{ shop.pincode }}</td>
+                    <td>
+                        {% if shop.latitude is not none and shop.longitude is not none %}
+                            <code>{{ "%.4f"|format(shop.latitude|float) }}, {{ "%.4f"|format(shop.longitude|float) }}</code>
+                        {% else %}
+                            <span class="text-muted">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ shop.contact_phone }}</td>
+                    <td>
+                        {% if shop.status == 'ACTIVE' %}
+                            <span class="badge-active">ACTIVE</span>
+                        {% elif shop.status == 'SUSPENDED' %}
+                            <span class="badge-warning">SUSPENDED</span>
+                        {% else %}
+                            <span class="badge-inactive">{{ shop.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-btn-group">
+                            <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Products</a>
+                            <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">Inventory</a>
+                            <a href="{{ url_for('admin.shop_detail_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Details</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">No shops matched your current filter criteria.</p>
+    {% endif %}
+</div>
+
+{% if user.role == 'SUPER_ADMIN' %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Create New Shop</h2>
+        <p class="card-subtitle">Register a new store branch under {{ organization.name }} (Super Admin only).</p>
+    </div>
+
+    <form action="{{ url_for('admin.create_shop_action') }}" method="POST" class="stack-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label for="shop_name" class="form-label">Shop Name *</label>
+                <input type="text" id="shop_name" name="name" class="form-input" placeholder="e.g., Sanchay Mart — Indiranagar" required>
+            </div>
+            <div class="form-group">
+                <label for="shop_code" class="form-label">Unique Shop Code (Per Organization) *</label>
+                <input type="text" id="shop_code" name="code" class="form-input" placeholder="e.g., SHP-BLR-01" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="shop_address" class="form-label">Street Address *</label>
+            <input type="text" id="shop_address" name="address" class="form-input" placeholder="100 Feet Road, Indiranagar" required>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label for="shop_city" class="form-label">City *</label>
+                <input type="text" id="shop_city" name="city" class="form-input" placeholder="Bengaluru" required>
+            </div>
+            <div class="form-group">
+                <label for="shop_pincode" class="form-label">Pincode *</label>
+                <input type="text" id="shop_pincode" name="pincode" class="form-input" placeholder="560038" required>
+            </div>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label for="shop_lat" class="form-label">Latitude (-90 to 90)</label>
+                <input type="text" id="shop_lat" name="latitude" class="form-input" placeholder="12.971599">
+            </div>
+            <div class="form-group">
+                <label for="shop_lon" class="form-label">Longitude (-180 to 180)</label>
+                <input type="text" id="shop_lon" name="longitude" class="form-input" placeholder="77.641151">
+            </div>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label for="shop_phone" class="form-label">Contact Phone *</label>
+                <input type="text" id="shop_phone" name="contact_phone" class="form-input" placeholder="+91-8041234567" required>
+            </div>
+            <div class="form-group">
+                <label for="shop_email" class="form-label">Contact Email</label>
+                <input type="email" id="shop_email" name="contact_email" class="form-input" placeholder="indiranagar@example.com">
+            </div>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label for="shop_low_stock" class="form-label">Low-Stock Default Threshold</label>
+                <input type="number" id="shop_low_stock" name="low_stock_default_threshold" class="form-input" value="{{ organization.low_stock_default_threshold }}" min="0">
+            </div>
+            <div class="form-group">
+                <label for="shop_near_expiry" class="form-label">Near-Expiry Window (Days)</label>
+                <input type="number" id="shop_near_expiry" name="near_expiry_days_threshold" class="form-input" value="{{ organization.near_expiry_days_threshold }}" min="1">
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Create Shop</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

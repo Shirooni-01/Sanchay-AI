@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Batch {{ batch.batch_code }} — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Batch <code>{{ batch.batch_code }}</code> — {{ batch.product_name }}</h1>
+        <p class="page-subtitle">
+            Shop: <strong>{{ shop.name }}</strong> ({{ shop.code }}) &bull; SKU: <code>{{ batch.product_sku }}</code>
+            &bull; Status:
+            {% if batch.status == 'EXPIRED' or batch.is_expired %}
+            <span class="badge-danger">EXPIRED</span>
+            {% elif batch.status == 'DEPLETED' %}
+            <span class="badge-inactive">DEPLETED</span>
+            {% elif batch.is_near_expiry %}
+            <span class="badge-warning">NEAR EXPIRY ({{ batch.days_until_expiry }}d)</span>
+            {% else %}
+            <span class="badge-active">ACTIVE</span>
+            {% endif %}
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">&larr; All Batches</a>
+        {% if batch.shop_product_id %}
+        <a href="{{ url_for('catalog.shop_product_detail_page', shop_id=shop.id, shop_product_id=batch.shop_product_id) }}" class="btn btn-secondary btn-sm">Product Detail</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="stats-grid mb-4">
+    <div class="stat-card">
+        <span class="stat-label">Available / Initial Qty</span>
+        <span class="stat-value">{{ batch.available_qty }} / {{ batch.initial_qty }} {{ batch.unit }}</span>
+        <span class="stat-meta">Reserved: {{ batch.reserved_qty }} {{ batch.unit }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Expired / Damaged Buckets</span>
+        <span class="stat-value">Exp: {{ batch.expired_qty }} | Dmg: {{ batch.damaged_qty }}</span>
+        <span class="stat-meta">Quarantined non-sellable stock</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Received &amp; Expiry Dates</span>
+        <span class="stat-value">{{ batch.expiry_date or 'Non-Perishable' }}</span>
+        <span class="stat-meta">
+            Received: {{ batch.received_date }}
+            {% if batch.days_until_expiry is not none %}
+            ({{ batch.days_until_expiry }} days to expiry)
+            {% endif %}
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Unit Cost &amp; Supplier Ref</span>
+        <span class="stat-value">&#8377;{{ "%.2f"|format(batch.unit_cost) }}</span>
+        <span class="stat-meta">Supplier: {{ batch.supplier_reference or '—' }}</span>
+    </div>
+</div>
+
+{% if can_adjust_stock %}
+<section class="card mb-4">
+    <div class="card-header">
+        <h2 class="card-title">Authorized Adjustment for Batch <code>{{ batch.batch_code }}</code></h2>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ url_for('inventory.batch_detail_adjust_action', shop_id=shop.id, batch_id=batch.id) }}" class="auth-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label class="form-label" for="movement_type">Adjustment Type *</label>
+                    <select id="movement_type" name="movement_type" class="form-input" required>
+                        <option value="ADJUSTMENT_SUBTRACT">ADJUSTMENT_SUBTRACT (Cycle Count Reduction)</option>
+                        <option value="ADJUSTMENT_ADD">ADJUSTMENT_ADD (Cycle Count Addition)</option>
+                        <option value="MARK_DAMAGED">MARK_DAMAGED (Transfer Available &rarr; Damaged)</option>
+                        <option value="MARK_EXPIRED">MARK_EXPIRED (Transfer Available &rarr; Expired)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="quantity">Quantity *</label>
+                    <input id="quantity" name="quantity" type="number" min="1" class="form-input" required value="1">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="reason">Mandatory Audit Reason (Min 3 chars) *</label>
+                <input id="reason" name="reason" type="text" class="form-input" required minlength="3" maxlength="300" placeholder="Reason for adjusting batch {{ batch.batch_code }}">
+            </div>
+            <button type="submit" class="btn btn-primary">Record Batch Adjustment</button>
+        </form>
+    </div>
+</section>
+{% endif %}
+
+<section class="card">
+    <div class="card-header">
+        <h2 class="card-title">Immutable Stock Movement Ledger for Batch <code>{{ batch.batch_code }}</code></h2>
+    </div>
+    <div class="card-body">
+        {% if batch.movements %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Timestamp (UTC)</th>
+                        <th>Movement Type</th>
+                        <th>Bucket Affected</th>
+                        <th>Balance Before</th>
+                        <th>Quantity Change</th>
+                        <th>Balance After</th>
+                        <th>Unit Cost</th>
+                        <th>Performed By</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in batch.movements %}
+                    <tr>
+                        <td>#{{ m.id }}</td>
+                        <td>{{ m.created_at }}</td>
+                        <td><span class="badge-role">{{ m.movement_type }}</span></td>
+                        <td><code>{{ m.bucket_affected }}</code></td>
+                        <td>{{ m.balance_before }}</td>
+                        <td>
+                            <strong>
+                                {% if m.quantity_change >= 0 %}+{{ m.quantity_change }}{% else %}{{ m.quantity_change }}{% endif %}
+                            </strong>
+                        </td>
+                        <td><strong>{{ m.balance_after }}</strong></td>
+                        <td>&#8377;{{ "%.2f"|format(m.unit_cost_snapshot) }}</td>
+                        <td>{{ m.performed_by_username or ('User #' ~ m.performed_by_user_id) }}</td>
+                        <td>{{ m.reason or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No stock movements found for this batch.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

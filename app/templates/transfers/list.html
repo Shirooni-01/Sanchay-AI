@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Inter-Store Transfers &mdash; {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Inter-Store Transfers &mdash; {{ shop.name }}</h1>
+        <p class="page-subtitle">
+            Shop Code: <code>{{ shop.code }}</code> &bull;
+            Dual-approval cross-store stock redistribution (<code>BR-008</code>, <code>BR-009</code>)
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('transfers.new_transfer_form', shop_id=shop.id) }}" class="btn btn-primary btn-sm">+ Propose Transfer</a>
+        <a href="{{ url_for('analysis.overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Surplus Analysis</a>
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Shop Inventory</a>
+    </div>
+</div>
+
+<!-- Operational Summary Cards -->
+<section class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <span class="stat-label">Pending Approval</span>
+        <strong class="stat-value">{{ pending_incoming + pending_outgoing }}</strong>
+        <span class="stat-meta">
+            Awaiting Us: {{ pending_incoming }} &bull;
+            Awaiting Counterparty: {{ pending_outgoing }}
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Ready to Dispatch</span>
+        <strong class="stat-value">{{ ready_to_dispatch }}</strong>
+        <span class="stat-meta">Stock reserved; pending physical handover</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">In-Transit Incoming</span>
+        <strong class="stat-value">{{ in_transit_incoming }}</strong>
+        <span class="stat-meta">Dispatched; awaiting receipt confirmation</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Total Transfer Records</span>
+        <strong class="stat-value">{{ total }}</strong>
+        <span class="stat-meta">Filtered query results</span>
+    </div>
+</section>
+
+<!-- Filter Controls -->
+<section class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="filter-bar">
+            <select name="direction" class="form-input">
+                <option value="all" {% if direction == 'all' %}selected{% endif %}>All Directions</option>
+                <option value="outgoing" {% if direction == 'outgoing' %}selected{% endif %}>Outgoing (Our Surplus)</option>
+                <option value="incoming" {% if direction == 'incoming' %}selected{% endif %}>Incoming (To Our Shop)</option>
+            </select>
+            <select name="status" class="form-input">
+                <option value="">All Statuses</option>
+                <option value="PENDING_RECIPIENT_APPROVAL" {% if status_filter == 'PENDING_RECIPIENT_APPROVAL' %}selected{% endif %}>Pending Recipient Approval</option>
+                <option value="PENDING_SOURCE_APPROVAL" {% if status_filter == 'PENDING_SOURCE_APPROVAL' %}selected{% endif %}>Pending Source Approval</option>
+                <option value="APPROVED_RESERVED" {% if status_filter == 'APPROVED_RESERVED' %}selected{% endif %}>Approved &amp; Reserved</option>
+                <option value="DISPATCHED_IN_TRANSIT" {% if status_filter == 'DISPATCHED_IN_TRANSIT' %}selected{% endif %}>Dispatched (In Transit)</option>
+                <option value="COMPLETED" {% if status_filter == 'COMPLETED' %}selected{% endif %}>Completed</option>
+                <option value="REJECTED" {% if status_filter == 'REJECTED' %}selected{% endif %}>Rejected</option>
+                <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+            </select>
+            <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+            <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Reset</a>
+        </form>
+    </div>
+</section>
+
+<!-- Transfers Table -->
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Transfer Proposals &amp; Orders ({{ total }} records)</h2>
+        <span class="text-muted">Page {{ page }}</span>
+    </div>
+    <div class="card-body">
+        {% if transfers %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Transfer Code</th>
+                        <th>Direction</th>
+                        <th>Counterparty Shop</th>
+                        <th>Product &amp; Batch</th>
+                        <th>Quantity</th>
+                        <th>Unit Price / Value</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in transfers %}
+                    {% set is_outgoing = (t.source_shop_id == shop.id) %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('transfers.transfer_detail_page', shop_id=shop.id, transfer_id=t.id) }}">
+                                <strong><code>{{ t.transfer_code }}</code></strong>
+                            </a>
+                        </td>
+                        <td>
+                            {% if is_outgoing %}
+                            <span class="badge" style="background:#e0f2fe; color:#0369a1;">Outgoing &rarr;</span>
+                            {% else %}
+                            <span class="badge" style="background:#fef3c7; color:#92400e;">&larr; Incoming</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if is_outgoing %}
+                            {{ t.recipient_shop.name if t.recipient_shop else 'Shop #' ~ t.recipient_shop_id }}
+                            {% else %}
+                            {{ t.source_shop.name if t.source_shop else 'Shop #' ~ t.source_shop_id }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ t.product.name if t.product else 'Product #' ~ t.product_id }}</strong>
+                            <div class="text-muted text-xs">
+                                Batch: <code>{{ t.source_batch.batch_code if t.source_batch else 'N/A' }}</code> &bull;
+                                Exp: {{ t.batch_expiry_date_snapshot or (t.source_batch.expiry_date if t.source_batch else 'N/A') }}
+                            </div>
+                        </td>
+                        <td><strong>{{ t.quantity }}</strong> units</td>
+                        <td>
+                            &#8377;{{ "%.2f"|format(t.unit_transfer_price) }} / unit
+                            <div class="text-muted text-xs">Total: &#8377;{{ "%.2f"|format(t.total_transfer_value) }}</div>
+                        </td>
+                        <td>
+                            {% if t.status == 'APPROVED_RESERVED' %}
+                            <span class="badge" style="background:#dcfce7; color:#15803d; font-weight:600;">APPROVED &amp; RESERVED</span>
+                            {% elif t.status == 'DISPATCHED_IN_TRANSIT' %}
+                            <span class="badge" style="background:#dbeafe; color:#1d4ed8; font-weight:600;">IN TRANSIT</span>
+                            {% elif t.status == 'COMPLETED' %}
+                            <span class="badge" style="background:#f0fdf4; color:#166534; font-weight:600;">COMPLETED</span>
+                            {% elif t.status == 'REJECTED' %}
+                            <span class="badge" style="background:#fee2e2; color:#991b1b;">REJECTED</span>
+                            {% elif t.status == 'CANCELLED' %}
+                            <span class="badge" style="background:#f3f4f6; color:#4b5563;">CANCELLED</span>
+                            {% elif t.status == 'EXPIRED_OFFER' %}
+                            <span class="badge" style="background:#fef2f2; color:#b91c1c;">EXPIRED</span>
+                            {% else %}
+                            <span class="badge" style="background:#fef9c3; color:#854d0e;">{{ t.status.replace('_', ' ') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted text-xs">
+                            {{ t.created_at.strftime('%Y-%m-%d %H:%M') if t.created_at else '' }}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('transfers.transfer_detail_page', shop_id=shop.id, transfer_id=t.id) }}" class="btn btn-outline btn-xs">
+                                View &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No transfers found matching your filters.</p>
+            <a href="{{ url_for('transfers.new_transfer_form', shop_id=shop.id) }}" class="btn btn-primary btn-sm">+ Propose a New Transfer</a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

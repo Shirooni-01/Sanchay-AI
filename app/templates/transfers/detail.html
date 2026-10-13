@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}Transfer {{ transfer.transfer_code }} &mdash; {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Transfer <code>{{ transfer.transfer_code }}</code></h1>
+        <p class="page-subtitle">
+            Source: <strong>{{ transfer.source_shop.name }}</strong> &rarr;
+            Recipient: <strong>{{ transfer.recipient_shop.name }}</strong> &bull;
+            Status: <strong>{{ transfer.status }}</strong>
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-outline btn-sm">&larr; Back to Transfers</a>
+    </div>
+</div>
+
+<div class="grid-layout" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; align-items: start;">
+    <!-- Main Content Column -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <!-- Status Card -->
+        <section class="card">
+            <div class="card-header card-header-split">
+                <h2 class="card-title">Transfer Status &amp; Progress</h2>
+                <div>
+                    {% if transfer.status == 'APPROVED_RESERVED' %}
+                    <span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.95rem; padding:0.4rem 0.8rem; font-weight:700;">APPROVED &amp; RESERVED</span>
+                    {% elif transfer.status == 'DISPATCHED_IN_TRANSIT' %}
+                    <span class="badge" style="background:#dbeafe; color:#1d4ed8; font-size:0.95rem; padding:0.4rem 0.8rem; font-weight:700;">IN TRANSIT</span>
+                    {% elif transfer.status == 'COMPLETED' %}
+                    <span class="badge" style="background:#f0fdf4; color:#166534; font-size:0.95rem; padding:0.4rem 0.8rem; font-weight:700;">COMPLETED</span>
+                    {% elif transfer.status == 'REJECTED' %}
+                    <span class="badge" style="background:#fee2e2; color:#991b1b; font-size:0.95rem; padding:0.4rem 0.8rem; font-weight:700;">REJECTED</span>
+                    {% elif transfer.status == 'CANCELLED' %}
+                    <span class="badge" style="background:#f3f4f6; color:#4b5563; font-size:0.95rem; padding:0.4rem 0.8rem; font-weight:700;">CANCELLED</span>
+                    {% elif transfer.status == 'EXPIRED_OFFER' %}
+                    <span class="badge" style="background:#fef2f2; color:#b91c1c; font-size:0.95rem; padding:0.4rem 0.8rem; font-weight:700;">EXPIRED</span>
+                    {% else %}
+                    <span class="badge" style="background:#fef9c3; color:#854d0e; font-size:0.95rem; padding:0.4rem 0.8rem; font-weight:700;">{{ transfer.status.replace('_', ' ') }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div style="font-size: 0.95rem; line-height: 1.6; margin-bottom: 1rem;">
+                    {% if transfer.status == 'PENDING_RECIPIENT_APPROVAL' %}
+                    <p>This proposal was created by the source shop. It is currently awaiting approval from the <strong>Recipient Shop Owner ({{ transfer.recipient_shop.name }})</strong>. Stock has not been reserved yet.</p>
+                    {% elif transfer.status == 'PENDING_SOURCE_APPROVAL' %}
+                    <p>This request was created by the recipient shop. It is currently awaiting approval from the <strong>Source Shop Owner ({{ transfer.source_shop.name }})</strong>. Stock has not been reserved yet.</p>
+                    {% elif transfer.status == 'APPROVED_RESERVED' %}
+                    <p>Both shop owners have approved this transfer. <strong>{{ transfer.quantity }} units</strong> are locked in the source batch's <code>reserved_qty</code>. The source shop can now mark the package as dispatched.</p>
+                    {% elif transfer.status == 'DISPATCHED_IN_TRANSIT' %}
+                    <p>The units have been dispatched by the source shop and are currently in transit. The recipient shop owner must verify the shipment and confirm receipt to finalize inventory addition.</p>
+                    {% elif transfer.status == 'COMPLETED' %}
+                    <p>This transfer has been successfully received and completed. Stock was atomically deducted from the source batch and credited to the recipient shop batch.</p>
+                    {% elif transfer.status == 'REJECTED' %}
+                    <p>This transfer was rejected. Reason: <em>"{{ transfer.rejection_or_cancel_reason or 'No reason provided.' }}"</em>. Any reserved stock was released back to sellable inventory.</p>
+                    {% elif transfer.status == 'CANCELLED' %}
+                    <p>This transfer was cancelled. Reason: <em>"{{ transfer.rejection_or_cancel_reason or 'No reason provided.' }}"</em>. Any reserved stock was released back to sellable inventory.</p>
+                    {% endif %}
+                </div>
+
+                <!-- Approval Timestamps -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; background: var(--bg-surface, #f9fafb); padding: 0.75rem; border-radius: 6px;" class="text-xs">
+                    <div>
+                        <span class="text-muted">Source Approval:</span><br>
+                        <strong>{{ transfer.source_approved_at.strftime('%Y-%m-%d %H:%M UTC') if transfer.source_approved_at else 'Pending' }}</strong>
+                    </div>
+                    <div>
+                        <span class="text-muted">Recipient Approval:</span><br>
+                        <strong>{{ transfer.recipient_approved_at.strftime('%Y-%m-%d %H:%M UTC') if transfer.recipient_approved_at else 'Pending' }}</strong>
+                    </div>
+                    <div>
+                        <span class="text-muted">Stock Reserved At:</span><br>
+                        <strong>{{ transfer.reserved_at.strftime('%Y-%m-%d %H:%M UTC') if transfer.reserved_at else 'Not reserved' }}</strong>
+                    </div>
+                    <div>
+                        <span class="text-muted">Dispatched At:</span><br>
+                        <strong>{{ transfer.dispatched_at.strftime('%Y-%m-%d %H:%M UTC') if transfer.dispatched_at else 'Not dispatched' }}</strong>
+                    </div>
+                    <div>
+                        <span class="text-muted">Received At:</span><br>
+                        <strong>{{ transfer.received_at.strftime('%Y-%m-%d %H:%M UTC') if transfer.received_at else 'Not received' }}</strong>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Transfer Specifications -->
+        <section class="card">
+            <div class="card-header">
+                <h3 class="card-title">Transfer Specifications</h3>
+            </div>
+            <div class="card-body">
+                <table class="data-table" style="margin: 0;">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%;">Product</th>
+                            <td>
+                                <strong>{{ transfer.product.name }}</strong> (SKU: <code>{{ transfer.product.sku }}</code>)
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Source Batch Code</th>
+                            <td>
+                                <code>{{ transfer.source_batch.batch_code if transfer.source_batch else 'N/A' }}</code>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Batch Expiry Date</th>
+                            <td>
+                                <strong>{{ transfer.batch_expiry_date_snapshot or (transfer.source_batch.expiry_date if transfer.source_batch else 'N/A') }}</strong>
+                                <span class="text-muted text-xs">(Strictly preserved upon receipt)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Transfer Quantity</th>
+                            <td>
+                                <strong>{{ transfer.quantity }} {{ transfer.product.unit }}</strong>
+                                {% if transfer.received_good_qty is not none %}
+                                <div class="text-muted text-xs">
+                                    Received Good: {{ transfer.received_good_qty }} &bull; Damaged in Transit: {{ transfer.transit_damaged_qty }}
+                                </div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Agreed Unit Transfer Price</th>
+                            <td>
+                                &#8377;{{ "%.2f"|format(transfer.unit_transfer_price) }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Total Transfer Valuation</th>
+                            <td>
+                                <strong>&#8377;{{ "%.2f"|format(transfer.total_transfer_value) }}</strong>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Initiator</th>
+                            <td>
+                                {{ transfer.initiated_by_user.username if transfer.initiated_by_user else 'User #' ~ transfer.initiated_by_user_id }}
+                                (from {{ transfer.initiated_by_shop.name if transfer.initiated_by_shop else 'Shop #' ~ transfer.initiated_by_shop_id }})
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Offer Deadline</th>
+                            <td>
+                                {{ transfer.offer_expires_at.strftime('%Y-%m-%d %H:%M UTC') if transfer.offer_expires_at else 'N/A' }}
+                            </td>
+                        </tr>
+                        {% if transfer.dispatch_notes %}
+                        <tr>
+                            <th>Dispatch Notes</th>
+                            <td>{{ transfer.dispatch_notes }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if transfer.receipt_notes %}
+                        <tr>
+                            <th>Receipt Remarks</th>
+                            <td>{{ transfer.receipt_notes }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if transfer.recipient_batch_id %}
+                        <tr>
+                            <th>Recipient Batch Created</th>
+                            <td>
+                                Batch #{{ transfer.recipient_batch_id }} in {{ transfer.recipient_shop.name }}
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Lifecycle Action Controls -->
+        {% if can_approve or can_dispatch or can_receive or can_reject or can_cancel %}
+        <section class="card" style="border: 1px solid var(--primary, #0284c7);">
+            <div class="card-header" style="background: rgba(2, 132, 199, 0.05);">
+                <h3 class="card-title">Authorized Actions</h3>
+            </div>
+            <div class="card-body">
+                <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <!-- Approve Action -->
+                    {% if can_approve %}
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 1rem; border-radius: 6px;">
+                        <h4 style="margin: 0 0 0.5rem 0; color: #166534;">Approve Transfer &amp; Lock Reservation</h4>
+                        <p class="text-sm" style="margin-bottom: 0.75rem;">
+                            By approving, you confirm this stock exchange. <strong>{{ transfer.quantity }} units</strong> will be atomically reserved in the source batch.
+                        </p>
+                        <form method="post" action="{{ url_for('transfers.approve_transfer_form_action', shop_id=shop.id, transfer_id=transfer.id) }}" style="display: flex; gap: 0.75rem; align-items: center;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="text" name="notes" placeholder="Optional approval remarks..." class="form-input" style="flex: 1;">
+                            <button type="submit" class="btn btn-primary btn-sm">Confirm Approval &rarr;</button>
+                        </form>
+                    </div>
+                    {% endif %}
+
+                    <!-- Dispatch Action -->
+                    {% if can_dispatch %}
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 1rem; border-radius: 6px;">
+                        <h4 style="margin: 0 0 0.5rem 0; color: #1e40af;">Confirm Physical Dispatch</h4>
+                        <p class="text-sm" style="margin-bottom: 0.75rem;">
+                            Confirm that the {{ transfer.quantity }} units have been handed over to the courier / transport vehicle.
+                        </p>
+                        <form method="post" action="{{ url_for('transfers.dispatch_transfer_form_action', shop_id=shop.id, transfer_id=transfer.id) }}" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <input type="text" name="carrier_reference" placeholder="Carrier / Vehicle / Tracking # (optional)" class="form-input">
+                                <input type="text" name="dispatch_notes" placeholder="Handover notes (optional)" class="form-input">
+                            </div>
+                            <div>
+                                <button type="submit" class="btn btn-primary btn-sm">Mark as Dispatched &rarr;</button>
+                            </div>
+                        </form>
+                    </div>
+                    {% endif %}
+
+                    <!-- Receive Action -->
+                    {% if can_receive %}
+                    <div style="background: #f0fdf4; border: 1px solid #86efac; padding: 1rem; border-radius: 6px;">
+                        <h4 style="margin: 0 0 0.5rem 0; color: #15803d;">Confirm Physical Receipt &amp; Accept Stock</h4>
+                        <p class="text-sm" style="margin-bottom: 0.75rem;">
+                            Confirm physical delivery. Units will be atomically deducted from the source shop and added to your shop's inventory preserving the original batch expiry date.
+                        </p>
+                        <form method="post" action="{{ url_for('transfers.receive_transfer_form_action', shop_id=shop.id, transfer_id=transfer.id) }}" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <div>
+                                    <label class="text-xs">Good Units Received:</label>
+                                    <input type="number" name="received_good_qty" value="{{ transfer.quantity }}" min="0" max="{{ transfer.quantity }}" class="form-input" required>
+                                </div>
+                                <div>
+                                    <label class="text-xs">Damaged Units in Transit:</label>
+                                    <input type="number" name="transit_damaged_qty" value="0" min="0" max="{{ transfer.quantity }}" class="form-input" required>
+                                </div>
+                            </div>
+                            <input type="text" name="receipt_notes" placeholder="Inspection remarks (optional)" class="form-input">
+                            <div>
+                                <button type="submit" class="btn btn-primary btn-sm">Confirm Receipt &amp; Complete Transfer &rarr;</button>
+                            </div>
+                        </form>
+                    </div>
+                    {% endif %}
+
+                    <!-- Reject / Cancel Action Row -->
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        {% if can_reject %}
+                        <form method="post" action="{{ url_for('transfers.reject_transfer_form_action', shop_id=shop.id, transfer_id=transfer.id) }}" style="display: inline-flex; gap: 0.5rem; align-items: center;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="text" name="reason" placeholder="Rejection reason..." class="form-input text-sm" required style="width: 220px;">
+                            <button type="submit" class="btn btn-outline btn-sm" style="color: #b91c1c; border-color: #fca5a5;">Reject</button>
+                        </form>
+                        {% endif %}
+
+                        {% if can_cancel %}
+                        <form method="post" action="{{ url_for('transfers.cancel_transfer_form_action', shop_id=shop.id, transfer_id=transfer.id) }}" style="display: inline-flex; gap: 0.5rem; align-items: center;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="text" name="reason" placeholder="Cancellation reason..." class="form-input text-sm" required style="width: 220px;">
+                            <button type="submit" class="btn btn-outline btn-sm" style="color: #4b5563;">Cancel Transfer</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+    </div>
+
+    <!-- Right Column: Audit Trail Timeline -->
+    <aside>
+        <section class="card">
+            <div class="card-header">
+                <h3 class="card-title">Status Audit Timeline</h3>
+            </div>
+            <div class="card-body">
+                {% if transfer.status_logs %}
+                <ul class="timeline" style="list-style: none; padding-left: 0; margin: 0;">
+                    {% for log in transfer.status_logs %}
+                    <li style="position: relative; padding-bottom: 1.25rem; border-left: 2px solid var(--border-color, #e5e7eb); padding-left: 1rem; margin-left: 0.5rem;">
+                        <span style="position: absolute; left: -0.4rem; top: 0; width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--primary, #0284c7);"></span>
+                        <div class="text-xs text-muted">
+                            {{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '' }}
+                        </div>
+                        <div style="font-weight: 600; font-size: 0.85rem; margin-top: 0.15rem;">
+                            {% if log.from_status %}
+                            {{ log.from_status }} &rarr;
+                            {% endif %}
+                            {{ log.to_status }}
+                        </div>
+                        <div class="text-xs text-muted" style="margin-top: 0.15rem;">
+                            By: <strong>{{ log.actor.username if log.actor else 'SYSTEM' }}</strong>
+                        </div>
+                        {% if log.notes %}
+                        <div class="text-xs" style="margin-top: 0.25rem; background: var(--bg-surface, #f9fafb); padding: 0.35rem 0.5rem; border-radius: 4px;">
+                            {{ log.notes }}
+                        </div>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-sm">No status changes recorded yet.</p>
+                {% endif %}
+            </div>
+        </section>
+    </aside>
+</div>
+{% endblock %}

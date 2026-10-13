@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Inventory Overview — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Inventory Overview — {{ shop.name }} ({{ shop.code }})</h1>
+        <p class="page-subtitle">
+            Business Date: <strong>{{ overview.business_date }}</strong> ({{ overview.timezone }}) &bull;
+            Deterministic batch-reconciled stock levels, expiry tracking, and low-stock monitoring.
+            {% if not shop.is_operational %}
+            <span class="badge-inactive">Read-Only (Deactivated Shop)</span>
+            {% endif %}
+        </p>
+    </div>
+    <div class="header-actions">
+        {% if accessible_shops|length > 1 %}
+        <select class="form-input form-input-sm" onchange="if(this.value) window.location.href=this.value;">
+            {% for s in accessible_shops %}
+            <option value="{{ url_for('inventory.shop_inventory_overview_page', shop_id=s.id) }}" {% if s.id == shop.id %}selected{% endif %}>
+                {{ s.name }} ({{ s.code }}){% if not s.is_active %} [INACTIVE]{% endif %}
+            </option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        {% if can_receive_stock %}
+        <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">Receive Batch Stock</a>
+        {% endif %}
+        {% if can_adjust_stock %}
+        <a href="{{ url_for('inventory.adjust_stock_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Adjust Stock</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="subnav-tabs mb-4">
+    <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="subnav-tab active">Overview</a>
+    <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="subnav-tab">Product Catalog</a>
+    <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="subnav-tab">Batches (FEFO)</a>
+    <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="subnav-tab">Receive Stock</a>
+    {% if can_adjust_stock %}
+    <a href="{{ url_for('inventory.adjust_stock_page', shop_id=shop.id) }}" class="subnav-tab">Adjust Stock</a>
+    {% endif %}
+    <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="subnav-tab">
+        Low Stock ({{ overview.kpis.low_stock_count }})
+    </a>
+    <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="subnav-tab">
+        Expiry Alerts ({{ overview.kpis.near_expiry_batch_count + overview.kpis.expired_batch_count }})
+    </a>
+    <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="subnav-tab">Stock Ledger</a>
+</div>
+
+<div class="stats-grid mb-4">
+    <div class="stat-card">
+        <span class="stat-label">Active SKUs &amp; Sellable Units</span>
+        <span class="stat-value">{{ overview.kpis.total_available_units }} units</span>
+        <span class="stat-meta">{{ overview.kpis.active_products }} active of {{ overview.kpis.total_products }} shop SKUs</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Low Stock &amp; Out of Stock</span>
+        <span class="stat-value">{{ overview.kpis.low_stock_count }} SKUs</span>
+        <span class="stat-meta">
+            Out of stock: <strong>{{ overview.kpis.out_of_stock_count }}</strong> &bull;
+            <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}">View Low Stock &rarr;</a>
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Near-Expiry Batches</span>
+        <span class="stat-value">{{ overview.kpis.near_expiry_batch_count }} Batches</span>
+        <span class="stat-meta">
+            <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}">Inspect FEFO Expiry Queue &rarr;</a>
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Expired &amp; Valuation</span>
+        <span class="stat-value">&#8377;{{ "%.2f"|format(overview.kpis.inventory_valuation_cost) }}</span>
+        <span class="stat-meta">
+            Expired units: <strong>{{ overview.kpis.total_expired_units }}</strong> ({{ overview.kpis.expired_batch_count }} batches)
+        </span>
+    </div>
+</div>
+
+<div class="dashboard-grid mb-4">
+    <section class="card">
+        <div class="card-header card-header-split">
+            <h2 class="card-title">Low-Stock &amp; Out-of-Stock Alerts</h2>
+            <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Full Low-Stock View</a>
+        </div>
+        <div class="card-body">
+            {% if overview.low_stock_items %}
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>SKU / Product</th>
+                            <th>Available</th>
+                            <th>Threshold</th>
+                            <th>Severity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alert in overview.low_stock_items[:6] %}
+                        <tr>
+                            <td>
+                                <code>{{ alert.product_sku }}</code><br>
+                                <strong>{{ alert.product_name }}</strong>
+                            </td>
+                            <td><strong>{{ alert.available_qty }}</strong> {{ alert.unit }}</td>
+                            <td>{{ alert.reorder_level }} {{ alert.unit }}</td>
+                            <td>
+                                {% if alert.severity == 'OUT_OF_STOCK' %}
+                                <span class="badge-danger">OUT OF STOCK</span>
+                                {% else %}
+                                <span class="badge-warning">LOW STOCK</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-state">All active products in {{ shop.name }} are above their reorder thresholds.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-header card-header-split">
+            <h2 class="card-title">Near-Expiry &amp; Expired Batch Alerts</h2>
+            <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Full Expiry View</a>
+        </div>
+        <div class="card-body">
+            {% if overview.near_expiry_batches or overview.expired_batches %}
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Batch / SKU</th>
+                            <th>Expiry Date</th>
+                            <th>Qty</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for eb in overview.expired_batches[:4] %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=eb.batch_id) }}"><code>{{ eb.batch_code }}</code></a><br>
+                                <span class="text-muted">{{ eb.product_name }}</span>
+                            </td>
+                            <td><strong>{{ eb.expiry_date }}</strong></td>
+                            <td>{{ eb.expired_qty }} {{ eb.unit }}</td>
+                            <td><span class="badge-danger">EXPIRED</span></td>
+                        </tr>
+                        {% endfor %}
+                        {% for nb in overview.near_expiry_batches[:4] %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=nb.batch_id) }}"><code>{{ nb.batch_code }}</code></a><br>
+                                <span class="text-muted">{{ nb.product_name }}</span>
+                            </td>
+                            <td><strong>{{ nb.expiry_date }}</strong> ({{ nb.days_until_expiry }}d)</td>
+                            <td>{{ nb.available_qty }} {{ nb.unit }}</td>
+                            <td><span class="badge-warning">NEAR EXPIRY</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-state">No near-expiry or expired batches detected in {{ shop.name }}.</p>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Reconciled Product Inventory Matrix</h2>
+        <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">Manage Product Catalog</a>
+    </div>
+    <div class="card-body">
+        {% if products %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Available</th>
+                        <th>Reserved</th>
+                        <th>Expired / Damaged</th>
+                        <th>Active Batches</th>
+                        <th>Earliest FEFO Expiry</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in products %}
+                    <tr>
+                        <td><code>{{ p.sku }}</code></td>
+                        <td>
+                            <a href="{{ url_for('catalog.shop_product_detail_page', shop_id=shop.id, shop_product_id=p.shop_product_id) }}">
+                                <strong>{{ p.name }}</strong>
+                            </a>
+                            <div class="text-muted text-xs">{{ p.category }} ({{ p.unit }})</div>
+                        </td>
+                        <td><strong>{{ p.available_qty }}</strong></td>
+                        <td>{{ p.reserved_qty }}</td>
+                        <td>{{ p.expired_qty }} / {{ p.damaged_qty }}</td>
+                        <td>{{ p.active_batch_count }}</td>
+                        <td>{{ p.earliest_expiry_date or '—' }}</td>
+                        <td>
+                            {% if p.is_out_of_stock %}
+                            <span class="badge-danger">OUT OF STOCK</span>
+                            {% elif p.is_low_stock %}
+                            <span class="badge-warning">LOW STOCK</span>
+                            {% else %}
+                            <span class="badge-active">IN STOCK</span>
+                            {% endif %}
+                            {% if p.has_near_expiry %}
+                            <span class="badge-warning">NEAR EXPIRY</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-cluster">
+                                <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id, product_id=p.product_id) }}" class="btn btn-secondary btn-sm">Batches</a>
+                                {% if can_receive_stock and p.is_active %}
+                                <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id, product_id=p.product_id) }}" class="btn btn-primary btn-sm">+ Receive</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No products enrolled in {{ shop.name }} yet. Start by adding products to the catalog.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

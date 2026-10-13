@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Role-Scoped Operational Dashboard</h1>
+        <p class="page-subtitle">
+            Signed in as <strong>{{ user.full_name }}</strong> with backend-enforced <span class="role-badge role-{{ user.role | lower }}">{{ user.role }}</span> permissions.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('notifications.notification_center_page') }}" class="btn btn-outline btn-sm">Notification Alerts</a>
+        {% if user.role == 'SUPER_ADMIN' %}
+            <a href="{{ url_for('admin.organization_page') }}" class="btn btn-outline btn-sm">Organization Settings</a>
+            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-primary btn-sm">Manage Shops</a>
+        {% elif user.role == 'SHOP_OWNER' %}
+            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-primary btn-sm">My Assigned Shops</a>
+            <a href="{{ url_for('admin.users_page') }}" class="btn btn-outline btn-sm">Manage Shop Staff</a>
+        {% else %}
+            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-primary btn-sm">My Assigned Shops</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if not organization %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">No Organization Linked</h2>
+        <p class="card-subtitle">
+            {% if user.role == 'SUPER_ADMIN' %}
+                You are a Super Admin without an initialized organization. Create your organization to begin adding shops and team members.
+            {% else %}
+                Your account has not yet been assigned to an active organization. Contact your Super Admin.
+            {% endif %}
+        </p>
+    </div>
+    {% if user.role == 'SUPER_ADMIN' %}
+        <a href="{{ url_for('admin.organization_page') }}" class="btn btn-primary">Create Organization</a>
+    {% endif %}
+</div>
+{% else %}
+<section class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-label">Organization</span>
+        <strong class="stat-value">{{ organization.name }}</strong>
+        <span class="stat-meta">Code: <code>{{ organization.code }}</code> &bull;
+            {% if organization.status == 'ACTIVE' %}
+                <span class="badge-active">ACTIVE</span>
+            {% else %}
+                <span class="badge-inactive">{{ organization.status }}</span>
+            {% endif %}
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Accessible Shops</span>
+        <strong class="stat-value">{{ shops | length }}</strong>
+        <span class="stat-meta">
+            {{ shops | selectattr('status', 'equalto', 'ACTIVE') | list | length }} Operational
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Default Alert Policy</span>
+        <strong class="stat-value">&le; {{ organization.low_stock_default_threshold }} units</strong>
+        <span class="stat-meta">Near-expiry window: {{ organization.near_expiry_days_threshold }} days</span>
+    </div>
+</section>
+
+<section class="card" style="margin-top: 1.5rem;">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">Authorized Shops in {{ organization.name }}</h2>
+            <p class="card-subtitle">
+                Only shops within your authorized tenant and role scope are displayed.
+            </p>
+        </div>
+        <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">Open Full Directory</a>
+    </div>
+
+    {% if shops %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Shop Name</th>
+                    <th>City &amp; Pincode</th>
+                    <th>Contact Phone</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for shop in shops %}
+                <tr>
+                    <td><code>{{ shop.code }}</code></td>
+                    <td><strong>{{ shop.name }}</strong></td>
+                    <td>{{ shop.city }} ({{ shop.pincode }})</td>
+                    <td>{{ shop.contact_phone }}</td>
+                    <td>
+                        {% if shop.status == 'ACTIVE' %}
+                            <span class="badge-active">ACTIVE</span>
+                        {% elif shop.status == 'SUSPENDED' %}
+                            <span class="badge-warning">SUSPENDED</span>
+                        {% else %}
+                            <span class="badge-inactive">{{ shop.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-btn-group">
+                            <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">POS</a>
+                            <a href="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Sales</a>
+                            <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Products</a>
+                            <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Inventory</a>
+                            <a href="{{ url_for('analysis.overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Analysis</a>
+                            <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Transfers</a>
+                            <a href="{{ url_for('admin.shop_detail_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Details</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">No shops are currently assigned or created in this scope.</p>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

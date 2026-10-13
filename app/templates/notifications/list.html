@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications &amp; Alerts &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="notifications-container">
+    <!-- Header -->
+    <header class="page-header">
+        <div>
+            <div class="breadcrumbs">
+                <a href="{{ url_for('admin.dashboard_page') }}">Home</a> &rsaquo;
+                {% if active_shop %}
+                <a href="{{ url_for('admin.shop_detail_page', shop_id=active_shop.id) }}">{{ active_shop.name }}</a> &rsaquo;
+                {% endif %}
+                <span>Notifications</span>
+            </div>
+            <h1 class="page-title">
+                Notifications &amp; Alerts
+                {% if unread_count > 0 %}
+                <span class="badge badge-warning" id="unread-count-pill">{{ unread_count }} unread</span>
+                {% else %}
+                <span class="badge badge-success" id="unread-count-pill">All caught up</span>
+                {% endif %}
+            </h1>
+            <p class="text-muted">
+                System events, low-stock warnings, batch expiry alerts, and inter-store transfer updates for your assigned stores.
+            </p>
+        </div>
+
+        <div class="header-actions">
+            {% if unread_count > 0 %}
+            <button type="button" class="btn btn-outline btn-sm" id="mark-all-read-btn">
+                Mark All as Read
+            </button>
+            {% endif %}
+
+            {% if active_shop %}
+            <button type="button" class="btn btn-primary btn-sm" id="evaluate-alerts-btn" data-shop-id="{{ active_shop.id }}">
+                Evaluate Shop Alerts
+            </button>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <section class="card filter-card mb-4">
+        <form method="GET" action="{{ url_for('notifications.notification_center_page') }}" class="filter-form">
+            {% if active_shop %}
+            <input type="hidden" name="shop_id" value="{{ active_shop.id }}">
+            {% endif %}
+
+            <div class="filter-group">
+                <label for="status-filter">Status</label>
+                <select name="status" id="status-filter" class="form-control form-control-sm" onchange="this.form.submit()">
+                    <option value="all" {% if current_status == 'all' %}selected{% endif %}>All Notifications</option>
+                    <option value="unread" {% if current_status == 'unread' %}selected{% endif %}>Unread Only ({{ unread_count }})</option>
+                    <option value="read" {% if current_status == 'read' %}selected{% endif %}>Read Only</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="type-filter">Category</label>
+                <select name="type" id="type-filter" class="form-control form-control-sm" onchange="this.form.submit()">
+                    <option value="">All Categories</option>
+                    <option value="LOW_STOCK" {% if current_type == 'LOW_STOCK' %}selected{% endif %}>Low Stock Alerts</option>
+                    <option value="NEAR_EXPIRY" {% if current_type == 'NEAR_EXPIRY' %}selected{% endif %}>Near Expiry Warnings</option>
+                    <option value="EXPIRY_RISK_CRITICAL" {% if current_type == 'EXPIRY_RISK_CRITICAL' %}selected{% endif %}>Critical Expiry Risks</option>
+                    <option value="SURPLUS_DETECTED" {% if current_type == 'SURPLUS_DETECTED' %}selected{% endif %}>Surplus Stock Available</option>
+                    <option value="TRANSFER_OFFER_RECEIVED" {% if current_type == 'TRANSFER_OFFER_RECEIVED' %}selected{% endif %}>Transfer Offers</option>
+                    <option value="TRANSFER_REQUEST_RECEIVED" {% if current_type == 'TRANSFER_REQUEST_RECEIVED' %}selected{% endif %}>Transfer Requests</option>
+                    <option value="TRANSFER_APPROVED" {% if current_type == 'TRANSFER_APPROVED' %}selected{% endif %}>Transfer Approvals</option>
+                    <option value="TRANSFER_DISPATCHED" {% if current_type == 'TRANSFER_DISPATCHED' %}selected{% endif %}>Transfers in Transit</option>
+                    <option value="TRANSFER_RECEIVED" {% if current_type == 'TRANSFER_RECEIVED' %}selected{% endif %}>Transfers Completed</option>
+                    <option value="TRANSFER_REJECTED" {% if current_type == 'TRANSFER_REJECTED' %}selected{% endif %}>Transfers Rejected</option>
+                    <option value="TRANSFER_CANCELLED" {% if current_type == 'TRANSFER_CANCELLED' %}selected{% endif %}>Transfers Cancelled</option>
+                </select>
+            </div>
+
+            <div class="filter-actions">
+                <a href="{{ url_for('notifications.notification_center_page', shop_id=active_shop.id if active_shop else None) }}" class="btn btn-outline btn-sm">Reset</a>
+            </div>
+        </form>
+    </section>
+
+    <!-- Notification Feed -->
+    <section class="notification-feed">
+        {% if notifications %}
+            <div class="notification-list">
+                {% for n in notifications %}
+                <article class="notification-card {% if not n.is_read %}is-unread{% else %}is-read{% endif %} severity-{{ n.severity | lower }}" id="notif-{{ n.id }}">
+                    <div class="notif-indicator"></div>
+                    <div class="notif-content">
+                        <div class="notif-header">
+                            <div class="notif-badges">
+                                <span class="badge badge-{{ 'danger' if n.severity == 'CRITICAL' else ('warning' if n.severity == 'WARNING' else 'info') }}">
+                                    {{ n.severity }}
+                                </span>
+                                <span class="notif-type-tag">{{ n.notification_type | replace('_', ' ') | title }}</span>
+                                {% if not n.is_read %}
+                                <span class="badge-dot" title="Unread"></span>
+                                {% endif %}
+                            </div>
+                            <time class="notif-timestamp" datetime="{{ n.created_at }}">
+                                {{ n.created_at[:16] | replace('T', ' ') if n.created_at else '' }}
+                            </time>
+                        </div>
+
+                        <h3 class="notif-title">{{ n.title }}</h3>
+                        <p class="notif-message">{{ n.message }}</p>
+
+                        <div class="notif-footer">
+                            <div class="notif-links">
+                                {% if n.related_entity_type == 'transfer' and n.related_entity_id %}
+                                <a href="{{ url_for('transfers.transfer_detail_page', transfer_id=n.related_entity_id) }}" class="btn btn-outline btn-xs">
+                                    View Transfer &rarr;
+                                </a>
+                                {% elif n.related_entity_type == 'product' and n.related_entity_id %}
+                                    {% if n.shop_id %}
+                                    <a href="{{ url_for('catalog.shop_products_page', shop_id=n.shop_id) }}" class="btn btn-outline btn-xs">
+                                        View Product &rarr;
+                                    </a>
+                                    {% else %}
+                                    <a href="{{ url_for('catalog.catalog_Entry_redirect') }}" class="btn btn-outline btn-xs">
+                                        View Catalog &rarr;
+                                    </a>
+                                    {% endif %}
+                                {% elif n.related_entity_type == 'batch' and n.related_entity_id %}
+                                    {% if n.shop_id %}
+                                    <a href="{{ url_for('inventory.batch_detail_page', shop_id=n.shop_id, batch_id=n.related_entity_id) }}" class="btn btn-outline btn-xs">
+                                        View Batch Ledger &rarr;
+                                    </a>
+                                    {% else %}
+                                    <a href="{{ url_for('inventory.inventory_entry_redirect') }}" class="btn btn-outline btn-xs">
+                                        View Inventory &rarr;
+                                    </a>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+
+                            <div class="notif-actions">
+                                {% if not n.is_read %}
+                                <button type="button" class="btn btn-outline btn-xs mark-read-btn" data-notif-id="{{ n.id }}">
+                                    Mark as Read
+                                </button>
+                                {% else %}
+                                <span class="text-muted text-sm">Read</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination Controls -->
+            {% if meta.total_pages > 1 %}
+            <nav class="pagination-nav mt-4" aria-label="Notification pagination">
+                <span class="pagination-info text-muted">
+                    Showing page {{ meta.page }} of {{ meta.total_pages }} ({{ meta.total_items }} total)
+                </span>
+                <div class="pagination-buttons">
+                    {% if meta.page > 1 %}
+                    <a href="{{ url_for('notifications.notification_center_page', page=meta.page - 1, status=current_status, type=current_type, shop_id=active_shop.id if active_shop else None) }}" class="btn btn-outline btn-sm">&larr; Previous</a>
+                    {% endif %}
+                    {% if meta.page < meta.total_pages %}
+                    <a href="{{ url_for('notifications.notification_center_page', page=meta.page + 1, status=current_status, type=current_type, shop_id=active_shop.id if active_shop else None) }}" class="btn btn-outline btn-sm">Next &rarr;</a>
+                    {% endif %}
+                </div>
+            </nav>
+            {% endif %}
+
+        {% else %}
+            <!-- Empty State -->
+            <div class="card empty-state text-center p-5">
+                <div class="empty-state-icon">🔔</div>
+                <h3>No Notifications Found</h3>
+                <p class="text-muted">
+                    {% if current_status == 'unread' %}
+                    You have caught up with all alerts! There are no unread notifications right now.
+                    {% else %}
+                    No notifications match your current filter criteria.
+                    {% endif %}
+                </p>
+                <div class="empty-state-actions mt-3">
+                    <a href="{{ url_for('notifications.notification_center_page', status='all', shop_id=active_shop.id if active_shop else None) }}" class="btn btn-outline btn-sm">View All Notifications</a>
+                </div>
+            </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document aria-live="polite";
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. Mark individual notification as read
+    document.querySelectorAll(".mark-read-btn").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            var notifId = this.getAttribute("data-notif-id");
+            var card = document.getElementById("notif-" + notifId);
+            this.disabled = true;
+            this.textContent = "Updating...";
+
+            window.sanchayAPI.fetchJSON("/api/v1/notifications/" + notifId + "/read", {
+                method: "POST"
+            }).then(function(resp) {
+                if (resp.success) {
+                    if (card) {
+                        card.classList.remove("is-unread");
+                        card.classList.add("is-read");
+                        var dot = card.querySelector(".badge-dot");
+                        if (dot) dot.remove();
+                        btn.parentElement.innerHTML = '<span class="text-muted text-sm">Read</span>';
+                    }
+                    updateNavUnreadCount();
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = "Mark as Read";
+                    alert(resp.error ? resp.error.message : "Failed to update notification.");
+                }
+            }).catch(function(err) {
+                btn.disabled = false;
+                btn.textContent = "Mark as Read";
+                alert("Network error: " + err.message);
+            });
+        });
+    });
+
+    // 2. Mark all as read
+    var markAllBtn = document.getElementById("mark-all-read-btn");
+    if (markAllBtn) {
+        markAllBtn.addEventListener("click", function() {
+            if (!confirm("Mark all notifications as read?")) return;
+            markAllBtn.disabled = true;
+            markAllBtn.textContent = "Marking all read...";
+
+            window.sanchayAPI.fetchJSON("/api/v1/notifications/read-all", {
+                method: "POST"
+            }).then(function(resp) {
+                if (resp.success) {
+                    window.location.reload();
+                } else {
+                    markAllBtn.disabled = false;
+                    markAllBtn.textContent = "Mark All as Read";
+                    alert(resp.error ? resp.error.message : "Failed to mark all as read.");
+                }
+            }).catch(function(err) {
+                markAllBtn.disabled = false;
+                markAllBtn.textContent = "Mark All as Read";
+                alert("Network error: " + err.message);
+            });
+        });
+    }
+
+    // 3. Evaluate alerts on demand
+    var evaluateBtn = document.getElementById("evaluate-alerts-btn");
+    if (evaluateBtn) {
+        evaluateBtn.addEventListener("click", function() {
+            var shopId = this.getAttribute("data-shop-id");
+            evaluateBtn.disabled = true;
+            evaluateBtn.textContent = "Evaluating...";
+
+            window.sanchayAPI.fetchJSON("/api/v1/shops/" + shopId + "/inventory/check-alerts", {
+                method: "POST"
+            }).then(function(resp) {
+                if (resp.success) {
+                    alert("Evaluated: " + (resp.data.notifications_generated || 0) + " new alerts generated.");
+                    window.location.reload();
+                } else {
+                    evaluateBtn.disabled = false;
+                    evaluateBtn.textContent = "Evaluate Shop Alerts";
+                    alert(resp.error ? resp.error.message : "Failed to evaluate alerts.");
+                }
+            }).catch(function(err) {
+                evaluateBtn.disabled = false;
+                evaluateBtn.textContent = "Evaluate Shop Alerts";
+                alert("Network error: " + err.message);
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Expiry-Risk Analysis &mdash; {{ shop.name }} &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+{% set page_heading = "Near-Expiry & FEFO Batch Risk Analysis" %}
+{% include "analysis/_header.html" %}
+
+<div class="card" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="{{ url_for('analysis.expiry_risk_page', shop_id=shop.id) }}" class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; gap: 1rem;">
+        <input type="hidden" name="lookback_days" value="{{ analysis.configuration.lookback_days }}">
+        <input type="hidden" name="safety_stock_days" value="{{ analysis.configuration.safety_stock_days }}">
+        {% if analysis.configuration.safety_stock_qty_override is not none %}
+        <input type="hidden" name="safety_stock_qty" value="{{ analysis.configuration.safety_stock_qty_override }}">
+        {% endif %}
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="q">Search Batch / SKU / Product</label>
+            <input type="text" id="q" name="q" class="form-control" placeholder="e.g., MILK or BATCH-01" value="{{ search_q }}">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="risk_level">Expiry Risk Level</label>
+            <select id="risk_level" name="risk_level" class="form-control">
+                <option value="">All Risk Levels</option>
+                {% for lvl in valid_risk_levels %}
+                <option value="{{ lvl }}" {% if risk_filter == lvl %}selected{% endif %}>{{ lvl }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="only_near_expiry">Near-Expiry Filter</label>
+            <select id="only_near_expiry" name="only_near_expiry" class="form-control">
+                <option value="0" {% if not only_near_expiry %}selected{% endif %}>All Batches ({{ analysis.kpis.total_batches_analyzed }})</option>
+                <option value="1" {% if only_near_expiry %}selected{% endif %}>Only Near-Expiry &amp; Expired</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary">Filter Batches</button>
+            <a href="{{ url_for('analysis.expiry_risk_page', shop_id=shop.id, **query_params) }}" class="btn btn-outline">Clear</a>
+        </div>
+    </form>
+</div>
+
+<section class="card">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">FEFO-Ordered Batch Expiry-Risk Evaluation ({{ batches | length }} Batches)</h2>
+            <p class="card-subtitle">
+                Earlier-expiring sellable batches of the same product absorb projected demand first before later batches are evaluated. Reserved, damaged, and expired units are excluded from sellable stock.
+            </p>
+        </div>
+    </div>
+
+    {% if batches %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Batch &amp; FEFO Rank</th>
+                    <th>Product</th>
+                    <th>Expiry &amp; Days Left</th>
+                    <th>Sellable (Excluded)</th>
+                    <th>Earlier FEFO Stock</th>
+                    <th>Velocity ({{ analysis.configuration.lookback_days }}d)</th>
+                    <th>Est. Batch Demand</th>
+                    <th>Est. Unsold at Expiry</th>
+                    <th>Risk Level</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in batches %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('analysis.batch_analysis_page', shop_id=shop.id, batch_id=b.batch_id, **query_params) }}">
+                            <strong><code>{{ b.batch_code }}</code></strong>
+                        </a>
+                        <div style="font-size: 0.78rem; color: #64748b;">
+                            {% if b.fefo_rank %}FEFO #{{ b.fefo_rank }}{% else %}No FEFO Rank ({{ b.status }}){% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('analysis.product_analysis_page', shop_id=shop.id, product_id=b.product_id, **query_params) }}">
+                            <strong>{{ b.product_name }}</strong>
+                        </a>
+                        <div style="font-size: 0.78rem; color: #64748b;"><code>{{ b.sku }}</code></div>
+                    </td>
+                    <td>
+                        {% if b.expiry_date %}
+                            <strong>{{ b.expiry_date }}</strong>
+                            <div style="font-size: 0.78rem; color: {% if b.days_to_expiry < 0 %}#dc2626{% elif b.is_near_expiry %}#d97706{% else %}#64748b{% endif %};">
+                                {{ b.days_to_expiry }} day(s) (Threshold: {{ b.near_expiry_threshold_days }}d)
+                            </div>
+                        {% else %}
+                            <span>Non-Perishable</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ b.eligible_sellable_qty }} {{ b.unit }}</strong>
+                        <div style="font-size: 0.76rem; color: #64748b;">
+                            Rsv: {{ b.reserved_qty_excluded }} | Dmg: {{ b.damaged_qty_excluded }} | Exp: {{ b.expired_qty_excluded }}
+                        </div>
+                    </td>
+                    <td>{{ b.earlier_batches_sellable_qty }} {{ b.unit }}</td>
+                    <td>
+                        {{ "%.2f"|format(b.daily_sales_velocity) }} {{ b.unit }}/d
+                        <div style="font-size: 0.76rem; color: #64748b;"><code>{{ b.history_status }}</code></div>
+                    </td>
+                    <td>
+                        {% if b.estimated_batch_demand_before_expiry is not none %}
+                            {{ b.estimated_batch_demand_before_expiry }} {{ b.unit }}
+                            <div style="font-size: 0.76rem; color: #64748b;">Prod Demand: {{ b.estimated_product_demand_before_expiry }}</div>
+                        {% else %}
+                            <span>N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if b.estimated_unsold_at_expiry_qty is not none %}
+                            <strong style="color: {% if b.estimated_unsold_at_expiry_qty > 0 %}#dc2626{% else %}#16a34a{% endif %};">
+                                {{ b.estimated_unsold_at_expiry_qty }} {{ b.unit }}
+                            </strong>
+                            {% if b.at_risk_cost_value > 0 %}
+                            <div style="font-size: 0.76rem; color: #64748b;">&#8377;{{ "%.2f"|format(b.at_risk_cost_value) }} cost</div>
+                            {% endif %}
+                        {% elif b.unverified_at_risk_qty > 0 %}
+                            <span class="badge-warning" title="Insufficient sales history to project demand">Unverified ({{ b.unverified_at_risk_qty }})</span>
+                        {% else %}
+                            <span>&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if b.expiry_risk_level in ('EXPIRED', 'CRITICAL') %}
+                            <span class="badge-inactive">{{ b.expiry_risk_level }}</span>
+                        {% elif b.expiry_risk_level in ('HIGH', 'MEDIUM', 'INSUFFICIENT_DATA') %}
+                            <span class="badge-warning">{{ b.expiry_risk_level }}</span>
+                        {% else %}
+                            <span class="badge-active">{{ b.expiry_risk_level }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('analysis.batch_analysis_page', shop_id=shop.id, batch_id=b.batch_id, **query_params) }}" class="btn btn-outline btn-sm">Inspect</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="10" style="background: #f8fafc; font-size: 0.83rem; color: #334155; padding: 0.5rem 1rem;">
+                        <strong>Rule Explanation:</strong> {{ b.explanation }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">No inventory batches match the selected expiry-risk filters.</p>
+    {% endif %}
+</section>
+{% endblock %}

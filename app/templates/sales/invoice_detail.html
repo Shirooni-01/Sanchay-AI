@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Invoice {{ sale.invoice_number }} &mdash; {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Invoice <code>{{ sale.invoice_number }}</code></h1>
+        <p class="page-subtitle">
+            Shop: <strong>{{ shop.name }}</strong> (<code>{{ shop.code }}</code>) &bull;
+            Cashier: <strong>{{ sale.sold_by_name }}</strong> &bull;
+            Date: {{ sale.created_at[:19].replace('T', ' ') if sale.created_at else '' }}
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('sales.sale_receipt_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-primary btn-sm">Open Printable Receipt</a>
+        <a href="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Back to Sales History</a>
+        <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">POS Counter</a>
+    </div>
+</div>
+
+<!-- Invoice Status & Totals Summary -->
+<section class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <span class="stat-label">Sale Status</span>
+        <strong class="stat-value">{{ sale.status }}</strong>
+        <span class="stat-meta">Payment Mode: <code>{{ sale.payment_mode }}</code></span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Subtotal &amp; Discount</span>
+        <strong class="stat-value">&#8377;{{ "%.2f"|format(sale.subtotal_amount) }}</strong>
+        <span class="stat-meta">Discount: &#8377;{{ "%.2f"|format(sale.discount_amount) }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Billed Total &amp; Refunded</span>
+        <strong class="stat-value">&#8377;{{ "%.2f"|format(sale.total_amount) }}</strong>
+        <span class="stat-meta">Refunded / Cancelled: &#8377;{{ "%.2f"|format(sale.returned_amount) }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Net Revenue &amp; Gross Profit</span>
+        <strong class="stat-value">&#8377;{{ "%.2f"|format(sale.net_revenue_amount) }}</strong>
+        <span class="stat-meta">
+            Net COGS: &#8377;{{ "%.2f"|format(sale.net_cogs_amount) }} &bull;
+            Gross Profit: &#8377;{{ "%.2f"|format(sale.gross_profit_amount) }}
+        </span>
+    </div>
+</section>
+
+<!-- Itemized FEFO Batch Allocations -->
+<section class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">FEFO Batch Allocations &amp; Line Items</h2>
+        <p class="card-subtitle">Each line shows the exact inventory batch deducted in First Expired, First Out (FEFO) order and historical unit prices captured at sale time.</p>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Line ID</th>
+                        <th>Product &amp; SKU</th>
+                        <th>Batch Code &amp; Expiry</th>
+                        <th>Sold Qty</th>
+                        <th>Returned Qty</th>
+                        <th>Eligible to Return</th>
+                        <th>Unit Price</th>
+                        <th>Line Discount</th>
+                        <th>Line Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sale.allocations %}
+                    <tr>
+                        <td><code>#{{ item.sale_item_id }}</code></td>
+                        <td>
+                            <strong>{{ item.product_name }}</strong>
+                            <div class="text-muted text-xs"><code>{{ item.sku }}</code> ({{ item.unit }})</div>
+                        </td>
+                        <td>
+                            <code>{{ item.batch_code }}</code>
+                            <div class="text-muted text-xs">Expiry: {{ item.expiry_date or 'Non-perishable' }}</div>
+                        </td>
+                        <td><strong>{{ item.quantity }}</strong></td>
+                        <td>{{ item.returned_quantity }}</td>
+                        <td><strong>{{ item.remaining_returnable_qty }}</strong></td>
+                        <td>&#8377;{{ "%.2f"|format(item.unit_selling_price) }}</td>
+                        <td>&#8377;{{ "%.2f"|format(item.line_discount) }}</td>
+                        <td><strong>&#8377;{{ "%.2f"|format(item.line_total) }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+{% if sale.status not in ('CANCELLED', 'RETURNED') and shop.status == 'ACTIVE' %}
+<div class="grid-2-col" style="margin-bottom: 1.5rem;">
+    <!-- Process Item Return Form -->
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">Process Customer Item Return (<code>API-024</code>)</h2>
+            <p class="card-subtitle">
+                <code>RESELLABLE</code> restores stock to the batch's sellable <code>available_qty</code> (if not expired).
+                <code>DAMAGED</code> or <code>EXPIRED</code> places returned items into non-sellable buckets.
+            </p>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('sales.process_return_action', shop_id=shop.id, sale_id=sale.id) }}" class="auth-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="idempotency_key" value="{{ return_idempotency_key }}">
+
+                <div class="form-group">
+                    <label class="form-label" for="sale_item_id">Select Allocated Line Item *</label>
+                    <select id="sale_item_id" name="sale_item_id" class="form-input" required>
+                        {% for item in sale.allocations if item.remaining_returnable_qty > 0 %}
+                        <option value="{{ item.sale_item_id }}">
+                            #{{ item.sale_item_id }} &mdash; {{ item.product_name }} (Batch {{ item.batch_code }}, Eligible: {{ item.remaining_returnable_qty }} {{ item.unit }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="quantity_returned">Quantity to Return *</label>
+                        <input id="quantity_returned" name="quantity_returned" type="number" min="1" value="1" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="return_condition">Returned Goods Condition *</label>
+                        <select id="return_condition" name="return_condition" class="form-input" required>
+                            {% for cond in return_conditions %}
+                            <option value="{{ cond }}" {% if cond == 'RESELLABLE' %}selected{% endif %}>{{ cond }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="return_reason">Return Reason (3-500 chars) *</label>
+                    <input id="return_reason" name="reason" type="text" minlength="3" maxlength="500" class="form-input" required placeholder="Customer exchanged / packaging damaged">
+                </div>
+
+                <button type="submit" class="btn btn-secondary">Process Item Return</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Same-Day Full Invoice Cancellation Form -->
+    {% if sale.status == 'COMPLETED' %}
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">Cancel Same-Day Invoice (<code>API-023</code>)</h2>
+            <p class="card-subtitle">Cancels the entire bill and restores all deducted units back to their original batches.</p>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('sales.cancel_sale_action', shop_id=shop.id, sale_id=sale.id) }}" class="auth-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label class="form-label" for="cancel_reason">Mandatory Cancellation Reason (3-500 chars) *</label>
+                    <input id="cancel_reason" name="reason" type="text" minlength="3" maxlength="500" class="form-input" required placeholder="Cashier entry mistake / customer cancelled at counter">
+                </div>
+                <button type="submit" class="btn btn-outline">Cancel Full Invoice</button>
+            </form>
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Return History Table -->
+<section class="card">
+    <div class="card-header">
+        <h2 class="card-title">Recorded Returns &amp; Cancellations</h2>
+    </div>
+    <div class="card-body">
+        {% if sale.cancellation_reason %}
+        <div class="alert alert-error" style="margin-bottom: 1rem;">
+            <span>
+                <strong>Cancelled at {{ sale.cancelled_at[:19].replace('T', ' ') if sale.cancelled_at else '' }}</strong>
+                by {{ sale.cancelled_by_name or 'Authorized User' }} &mdash; Reason: {{ sale.cancellation_reason }}
+            </span>
+        </div>
+        {% endif %}
+
+        {% if sale.returns %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Return ID</th>
+                        <th>Product &amp; Batch</th>
+                        <th>Qty Returned</th>
+                        <th>Condition</th>
+                        <th>Bucket Restored</th>
+                        <th>Refund Amount</th>
+                        <th>Reason</th>
+                        <th>Processed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ret in sale.returns %}
+                    <tr>
+                        <td><code>#{{ ret.id }}</code></td>
+                        <td>{{ ret.product_name }} (<code>{{ ret.batch_code }}</code>)</td>
+                        <td><strong>{{ ret.quantity_returned }}</strong></td>
+                        <td><code>{{ ret.return_condition }}</code></td>
+                        <td><code>{{ ret.stock_bucket_restored }}</code></td>
+                        <td>&#8377;{{ "%.2f"|format(ret.refund_amount) }}</td>
+                        <td>{{ ret.reason }}</td>
+                        <td>{{ ret.processed_by_name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% elif not sale.cancellation_reason %}
+        <p class="empty-state">No returns or cancellations have been recorded for this invoice.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

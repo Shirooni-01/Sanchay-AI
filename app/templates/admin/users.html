@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Users &amp; Role Assignments &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">User Membership &amp; Role Assignments</h1>
+        <p class="page-subtitle">
+            Manage organization personnel, role permissions, and shop-scoped assignments.
+        </p>
+    </div>
+</div>
+
+<section class="card" style="margin-bottom: 1.5rem;">
+    <form action="{{ url_for('admin.users_page') }}" method="GET" class="filter-bar">
+        <div class="form-group">
+            <label for="role" class="form-label">Filter by Role</label>
+            <select id="role" name="role" class="form-input">
+                <option value="">All Roles</option>
+                <option value="SUPER_ADMIN" {% if role_filter == 'SUPER_ADMIN' %}selected{% endif %}>SUPER_ADMIN</option>
+                <option value="SHOP_OWNER" {% if role_filter == 'SHOP_OWNER' %}selected{% endif %}>SHOP_OWNER</option>
+                <option value="STAFF" {% if role_filter == 'STAFF' %}selected{% endif %}>STAFF</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="shop_id" class="form-label">Filter by Shop</label>
+            <select id="shop_id" name="shop_id" class="form-input">
+                <option value="">All Accessible Shops</option>
+                {% for s in accessible_shops %}
+                    <option value="{{ s.id }}" {% if shop_id_filter == s.id %}selected{% endif %}>{{ s.name }} ({{ s.code }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            <a href="{{ url_for('admin.users_page') }}" class="btn btn-outline btn-sm">Reset</a>
+        </div>
+    </form>
+</section>
+
+<section class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+        <h2 class="card-title">Authorized Organization Personnel ({{ users | length }})</h2>
+    </div>
+
+    {% if users %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name &amp; Username</th>
+                    <th>Email</th>
+                    <th>Global Role</th>
+                    <th>Assigned Shops</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td><code>#{{ u.id }}</code></td>
+                    <td><strong>{{ u.full_name }}</strong><br><small><code>{{ u.username }}</code></small></td>
+                    <td>{{ u.email }}</td>
+                    <td><span class="role-badge role-{{ u.role | lower }}">{{ u.role }}</span></td>
+                    <td>
+                        {% set assignments = u.get_active_shop_assignments() %}
+                        {% if u.role == 'SUPER_ADMIN' %}
+                            <span class="text-muted">All Organization Shops</span>
+                        {% elif assignments %}
+                            {% for a in assignments %}
+                                <div>
+                                    <code>{{ a.shop.code if a.shop else a.shop_id }}</code>
+                                    ({{ a.assignment_role }}{% if a.is_primary %}, Primary{% endif %})
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <span class="text-muted">Unassigned</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.is_active %}
+                            <span class="badge-active">Active</span>
+                        {% else %}
+                            <span class="badge-inactive">Deactivated</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if u.id != user.id and (user.role == 'SUPER_ADMIN' or u.role == 'STAFF') %}
+                        <form action="{{ url_for('admin.update_user_action', user_id=u.id) }}" method="POST" class="inline-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="is_active" value="{{ 'false' if u.is_active else 'true' }}">
+                            <button type="submit" class="btn btn-outline btn-sm">
+                                {{ 'Deactivate' if u.is_active else 'Activate' }}
+                            </button>
+                        </form>
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">No users found for the selected filter.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <div class="card-header">
+        <h2 class="card-title">Create &amp; Assign New Team Member</h2>
+        <p class="card-subtitle">
+            {% if user.role == 'SUPER_ADMIN' %}
+                Super Admin can create Shop Owners or Staff and assign them to any active shop in {{ organization.name }}.
+            {% else %}
+                Shop Owner can create Staff accounts assigned to one of your active shops.
+            {% endif %}
+        </p>
+    </div>
+
+    <form action="{{ url_for('admin.create_user_action') }}" method="POST" class="stack-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label for="new_username" class="form-label">Username *</label>
+                <input type="text" id="new_username" name="username" class="form-input" placeholder="e.g., staff_blr01" required>
+            </div>
+            <div class="form-group">
+                <label for="new_email" class="form-label">Email Address *</label>
+                <input type="email" id="new_email" name="email" class="form-input" placeholder="staff@example.com" required>
+            </div>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label for="new_full_name" class="form-label">Full Name *</label>
+                <input type="text" id="new_full_name" name="full_name" class="form-input" placeholder="Full Name" required>
+            </div>
+            <div class="form-group">
+                <label for="new_phone" class="form-label">Phone Number</label>
+                <input type="text" id="new_phone" name="phone" class="form-input" placeholder="+91-9876543210">
+            </div>
+        </div>
+
+        <div class="form-row-2">
+            <div class="form-group">
+                <label for="new_role" class="form-label">Role *</label>
+                <select id="new_role" name="role" class="form-input" required>
+                    <option value="STAFF">STAFF</option>
+                    {% if user.role == 'SUPER_ADMIN' %}
+                        <option value="SHOP_OWNER">SHOP_OWNER</option>
+                    {% endif %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="new_shop_id" class="form-label">Initial Shop Assignment {% if user.role != 'SUPER_ADMIN' %}*{% endif %}</label>
+                <select id="new_shop_id" name="shop_id" class="form-input" {% if user.role != 'SUPER_ADMIN' %}required{% endif %}>
+                    {% if user.role == 'SUPER_ADMIN' %}
+                        <option value="">-- Optional Initial Shop --</option>
+                    {% endif %}
+                    {% for s in accessible_shops %}
+                        <option value="{{ s.id }}">{{ s.name }} ({{ s.code }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="new_user_password" class="form-label">Initial Password *</label>
+            <input type="password" id="new_user_password" name="password" class="form-input" placeholder="Min 8 chars, 1 uppercase, 1 lowercase, 1 digit" required>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Create Member</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

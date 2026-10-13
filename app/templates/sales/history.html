@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Sales History &amp; Summaries &mdash; {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Sales History &amp; Summaries &mdash; {{ shop.name }}</h1>
+        <p class="page-subtitle">
+            Shop Code: <code>{{ shop.code }}</code> &bull;
+            Gross vs. Net-of-Returns/Cancellations financial accounting (<code>BR-017</code>)
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">+ New POS Sale</a>
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Inventory Overview</a>
+    </div>
+</div>
+
+<!-- Financial & Quantity Summary Cards -->
+<section class="stats-grid" style="margin-bottom: 1.5rem;">
+    <div class="stat-card">
+        <span class="stat-label">Completed Sales Count</span>
+        <strong class="stat-value">{{ summary.completed_sales_count }}</strong>
+        <span class="stat-meta">
+            Partially Returned: {{ summary.partially_returned_count }} &bull;
+            Returned: {{ summary.returned_count }} &bull;
+            Cancelled: {{ summary.cancelled_count }}
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Gross Sales Revenue</span>
+        <strong class="stat-value">&#8377;{{ "%.2f"|format(summary.gross_sales_revenue) }}</strong>
+        <span class="stat-meta">
+            Returned: &#8377;{{ "%.2f"|format(summary.total_returned_amount) }} &bull;
+            Cancelled: &#8377;{{ "%.2f"|format(summary.cancelled_amount) }}
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Net Sales Revenue (After Returns)</span>
+        <strong class="stat-value">&#8377;{{ "%.2f"|format(summary.net_sales_revenue) }}</strong>
+        <span class="stat-meta">
+            Net COGS: &#8377;{{ "%.2f"|format(summary.net_cogs) }} &bull;
+            Net Gross Profit: <strong>&#8377;{{ "%.2f"|format(summary.net_gross_profit) }}</strong>
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Quantities Sold (Net)</span>
+        <strong class="stat-value">{{ summary.net_units_sold }} units</strong>
+        <span class="stat-meta">
+            Gross Sold: {{ summary.gross_units_sold }} &bull;
+            Returned: {{ summary.returned_units }}
+        </span>
+    </div>
+</section>
+
+<!-- Filter Bar -->
+<section class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="filter-bar">
+            <input type="text" name="q" value="{{ search_q }}" class="form-input" placeholder="Search invoice #, customer, or SKU...">
+            <input type="date" name="date_from" value="{{ date_from }}" class="form-input" title="From Date">
+            <input type="date" name="date_to" value="{{ date_to }}" class="form-input" title="To Date">
+            <select name="status" class="form-input">
+                <option value="">All Statuses</option>
+                {% for st in statuses %}
+                <option value="{{ st }}" {% if status_filter == st %}selected{% endif %}>{{ st }}</option>
+                {% endfor %}
+            </select>
+            <select name="payment_mode" class="form-input">
+                <option value="">All Payment Modes</option>
+                {% for pm in payment_modes %}
+                <option value="{{ pm }}" {% if payment_filter == pm %}selected{% endif %}>{{ pm }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-secondary btn-sm">Apply Filters</button>
+            <a href="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Reset</a>
+        </form>
+    </div>
+</section>
+
+<!-- Sales Table -->
+<section class="card">
+    <div class="card-header card-header-split">
+        <h2 class="card-title">Sales Transactions ({{ meta.total }} records)</h2>
+        <span class="text-muted">Page {{ meta.page }} of {{ meta.total_pages }}</span>
+    </div>
+    <div class="card-body">
+        {% if sales %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Invoice / Receipt #</th>
+                        <th>Date &amp; Time</th>
+                        <th>Customer</th>
+                        <th>Payment</th>
+                        <th>Units (Gross / Net)</th>
+                        <th>Total Billed</th>
+                        <th>Returned</th>
+                        <th>Net Revenue</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in sales %}
+                    <tr>
+                        <td><code>{{ s.invoice_number }}</code></td>
+                        <td>{{ s.created_at[:19].replace('T', ' ') if s.created_at else '' }}</td>
+                        <td>
+                            {{ s.customer_name or 'Walk-in Customer' }}
+                            {% if s.customer_phone %}
+                            <div class="text-muted text-xs">{{ s.customer_phone }}</div>
+                            {% endif %}
+                        </td>
+                        <td><code>{{ s.payment_mode }}</code></td>
+                        <td>{{ s.total_quantity_sold }} / <strong>{{ s.net_quantity_sold }}</strong></td>
+                        <td>&#8377;{{ "%.2f"|format(s.total_amount) }}</td>
+                        <td>&#8377;{{ "%.2f"|format(s.returned_amount) }}</td>
+                        <td><strong>&#8377;{{ "%.2f"|format(s.net_revenue_amount) }}</strong></td>
+                        <td>
+                            {% if s.status == 'COMPLETED' %}
+                            <span class="badge-active">COMPLETED</span>
+                            {% elif s.status == 'CANCELLED' %}
+                            <span class="badge-inactive">CANCELLED</span>
+                            {% else %}
+                            <span class="role-badge">{{ s.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('sales.sale_detail_page', shop_id=shop.id, sale_id=s.id) }}" class="btn btn-outline btn-sm">View / Returns</a>
+                            <a href="{{ url_for('sales.sale_receipt_page', shop_id=shop.id, sale_id=s.id) }}" class="btn btn-secondary btn-sm">Receipt</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No sales transactions match the selected filters.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

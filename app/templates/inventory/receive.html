@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Receive Batch Stock — {{ shop.name }} — Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Receive Batch Stock — {{ shop.name }} ({{ shop.code }})</h1>
+        <p class="page-subtitle">
+            Record incoming vendor deliveries into batch-tracked inventory and append an immutable <code>RECEIPT</code> ledger entry.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">&larr; Inventory Overview</a>
+        <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">View Batches</a>
+    </div>
+</div>
+
+<div class="subnav-tabs mb-4">
+    <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="subnav-tab">Overview</a>
+    <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="subnav-tab">Product Catalog</a>
+    <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="subnav-tab">Batches (FEFO)</a>
+    <a href="{{ url_for('inventory.receive_stock_page', shop_id=shop.id) }}" class="subnav-tab active">Receive Stock</a>
+    <a href="{{ url_for('inventory.low_stock_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Low Stock Alerts</a>
+    <a href="{{ url_for('inventory.expiry_alerts_page', shop_id=shop.id) }}" class="subnav-tab">Expiry Alerts</a>
+    <a href="{{ url_for('inventory.stock_movements_page', shop_id=shop.id) }}" class="subnav-tab">Stock Ledger</a>
+</div>
+
+<div class="dashboard-grid mb-4">
+    <section class="card">
+        <div class="card-header">
+            <h2 class="card-title">Receive New Inventory Batch</h2>
+        </div>
+        <div class="card-body">
+            {% if not shop.is_operational %}
+            <p class="empty-state">This shop is currently deactivated. Receiving new stock is disabled.</p>
+            {% elif products %}
+            <form method="post" action="{{ url_for('inventory.receive_stock_action', shop_id=shop.id) }}" class="auth-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label class="form-label" for="product_id">Select Shop Product *</label>
+                    <select id="product_id" name="product_id" class="form-input" required>
+                        <option value="">-- Select Active Product --</option>
+                        {% for p in products %}
+                        <option value="{{ p.product_id }}"
+                                data-cost="{{ '%.2f'|format(p.default_purchase_price) }}"
+                                data-perishable="{{ 'true' if p.is_perishable else 'false' }}"
+                                {% if selected_product_id == p.product_id %}selected{% endif %}>
+                            {{ p.sku }} — {{ p.name }} (Avail: {{ p.available_qty }} {{ p.unit }}, Cost: &#8377;{{ "%.2f"|format(p.default_purchase_price) }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="batch_code">Batch Identifier / Lot Number *</label>
+                        <input id="batch_code" name="batch_code" type="text" class="form-input" required maxlength="80" placeholder="B-2026-10A">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="received_qty">Received Quantity *</label>
+                        <input id="received_qty" name="received_qty" type="number" min="1" class="form-input" required value="50">
+                    </div>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="unit_cost">Purchase Unit Cost (INR) *</label>
+                        <input id="unit_cost" name="unit_cost" type="number" step="0.01" min="0" class="form-input" required value="22.00">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="received_date">Receipt Date *</label>
+                        <input id="received_date" name="received_date" type="date" class="form-input" required value="{{ today_iso }}">
+                    </div>
+                </div>
+                <div class="form-row-2">
+                    <div class="form-group">
+                        <label class="form-label" for="expiry_date">Expiry Date (Required for Perishables)</label>
+                        <input id="expiry_date" name="expiry_date" type="date" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="supplier_reference">Supplier / Invoice Reference (Optional)</label>
+                        <input id="supplier_reference" name="supplier_reference" type="text" class="form-input" maxlength="150" placeholder="INV-8812 / Regional Dairy Co-op">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Record Batch Receipt</button>
+            </form>
+            {% else %}
+            <p class="empty-state">
+                No active products exist in {{ shop.name }}.
+                <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}">Create or enroll a product first &rarr;</a>
+            </p>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card-header card-header-split">
+            <h2 class="card-title">Recent Batches in {{ shop.name }}</h2>
+            <a href="{{ url_for('inventory.shop_batches_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">All Batches</a>
+        </div>
+        <div class="card-body">
+            {% if recent_batches %}
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Batch</th>
+                            <th>Product</th>
+                            <th>Avail / Initial</th>
+                            <th>Expiry</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for b in recent_batches %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('inventory.batch_detail_page', shop_id=shop.id, batch_id=b.id) }}">
+                                    <code>{{ b.batch_code }}</code>
+                                </a>
+                            </td>
+                            <td>{{ b.product_name }}</td>
+                            <td><strong>{{ b.available_qty }}</strong> / {{ b.initial_qty }}</td>
+                            <td>{{ b.expiry_date or '—' }}</td>
+                            <td>
+                                {% if b.status == 'EXPIRED' or b.is_expired %}
+                                <span class="badge-danger">EXPIRED</span>
+                                {% elif b.status == 'DEPLETED' %}
+                                <span class="badge-inactive">DEPLETED</span>
+                                {% elif b.is_near_expiry %}
+                                <span class="badge-warning">NEAR EXPIRY</span>
+                                {% else %}
+                                <span class="badge-active">ACTIVE</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-state">No batches have been received for {{ shop.name }} yet.</p>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/inventory.js') }}"></script>
+{% endblock %}
