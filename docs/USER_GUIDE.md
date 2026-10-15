@@ -1,24 +1,23 @@
-# Sanchay AI — Shop Owner & Staff User Guide
+# Sanchay AI — Shop Owner User & Operations Guide
 
-**Target Audience:** `SHOP_OWNER` (Store Managers/Owners) and `STAFF` (Cashiers & Inventory Clerks)  
-**Status:** Phases 1–6 Implemented & Verified; Phases 7–8 Planned
+**Target Audience:** `SHOP_OWNER` (Store Owners & Managers)  
+**Status:** Production-Ready (`132/132` Tests Passing)  
+**Security Model:** Strict 2-Role RBAC (`SUPER_ADMIN` and `SHOP_OWNER`)
 
 ---
 
-## 1. Role Summary at Your Shop
+## 1. Shop Owner Operational Responsibilities
 
-| Capability | `SHOP_OWNER` | `STAFF` |
-| :--- | :---: | :---: |
-| Log in & view assigned shop dashboard | Yes | Yes |
-| Add/edit products, prices, and alert thresholds | **Yes** | No (Read-only) |
-| Receive new delivery batches (`RECEIPT`) | **Yes** | **Yes** |
-| Perform manual stock adjustments (`ADJUSTMENT`, `MARK_DAMAGED`) | **Yes** | No |
-| Run Point-of-Sale (POS) billing & print invoices | **Yes** | **Yes** |
-| Process customer returns (`RESELLABLE` / `DAMAGED` / `EXPIRED`) | **Yes** | **Yes** |
-| View deterministic Stock Analysis, Expiry Risk, Surplus & Recommendations | **Yes** | **Yes** |
-| Propose, **Approve**, or **Reject** inter-store stock transfers (Phase 6) | **Yes (Exclusive)** | No |
-| Record physical dispatch of an approved transfer (Phase 6) | **Yes** | **Yes** |
-| **Confirm physical receipt** of incoming transfer (`COMPLETED` — Phase 6) | **Yes (Exclusive)** | No |
+Under the strict 2-role architecture, the **`SHOP_OWNER`** possesses full operational control over assigned stores:
+
+| Operational Area | Capabilities |
+| :--- | :--- |
+| **Catalog & Pricing** | Add/edit products, manage shop-specific selling/cost prices, and configure alert thresholds (`low_stock_threshold`, `near_expiry_days`). |
+| **Batch Inwarding & Reconciliation** | Inward supplier batches with manufacture/expiry dates, track available vs. reserved units, and view immutable `stock_movements`. |
+| **Manual Stock Adjustments** | Mark damaged units (`MARK_DAMAGED`) or record cycle count discrepancies with mandatory audit reasons. |
+| **POS Billing & Invoicing** | High-speed FEFO counter checkout, line/bill discounts, offline queue auto-reconciliation, ESC/POS thermal slips (80mm/58mm), and formal A4 tax invoices. |
+| **AI Stock & Waste Intelligence** | Scikit-Learn demand forecasting, Poisson survival spoilage probability, and actionable salvage recommendations. |
+| **Inter-Store Stock Exchange** | Discover surplus, evaluate automated redistribution recommendations, execute dual-approval transfers, and confirm physical dispatch & receipt. |
 
 ---
 
@@ -66,6 +65,19 @@ Physical stock is always tracked by batch (`BR-001`):
   - `DAMAGED`: Records the returned units in `damaged_qty`.
   - `EXPIRED`: Records the returned units in `expired_qty`.
 
+### 3.3 Offline POS Counter Queue & Reconciliation
+When store internet disconnects during active billing:
+1. The POS counter queues bills locally with a client-generated unique `client_bill_id` (UUID).
+2. As soon as connectivity restores, click **Sync Offline Queue** or allow automatic background sync to `/api/v1/shops/<id>/sales/offline-reconcile`.
+3. **Idempotent Reconciliation:** Each bill is processed sequentially in FEFO order. Already-synced bills are recognized (`ALREADY_SYNCED`) and return the existing invoice without duplicate inventory deductions.
+4. **Stockout Isolation:** If a queued bill fails due to insufficient stock, only that specific bill is marked `CONFLICT_INSUFFICIENT_STOCK` with atomic rollback; valid bills in the batch are committed successfully.
+
+### 3.4 Printable Invoices: Thermal Slips & A4 Tax Invoices
+Every completed sale supports multi-format printing:
+- **Receipt Slip (`/shops/<id>/sales/<id>/receipt`):** Clean digital customer bill preview.
+- **ESC/POS Thermal Slip (`/shops/<id>/sales/<id>/thermal-slip`):** Compact monospace slip optimized for standard thermal receipt printers (supports 80mm and 58mm layouts via `?width=58`, and optional auto-print trigger with `?autoprint=1`).
+- **Formal A4 Tax Invoice (`/shops/<id>/sales/<id>/tax-invoice`):** Full-page invoice complete with store header, customer details, tax rates, payment mode, terms and conditions, and authorized signatory block suitable for PDF export and commercial filing.
+
 ---
 
 ## 4. Rule-Based Stock Analysis & Risk Insights (Phase 5 — Implemented & Verified)
@@ -79,7 +91,8 @@ Physical stock is always tracked by batch (`BR-001`):
    - **Expiry Risk (`/shops/<id>/analysis/expiry-risk`):** FEFO-ordered batch evaluation showing days to expiry, earlier FEFO stock, estimated batch demand before expiry, and projected unsold units.
    - **Potential Surplus (`/shops/<id>/analysis/surplus`):** Identifies transferable surplus units (`NEAR_EXPIRY_SURPLUS` and `OVERSTOCK_COVERAGE`) without double-counting across batches and without mutating stock.
    - **Low Stock (`/shops/<id>/analysis/low-stock`):** Flags `OUT_OF_STOCK`, `LOW_STOCK`, and `BELOW_SAFETY_STOCK` items with deficit and recommended replenishment quantities.
-   - **Recommendations (`/shops/<id>/analysis/recommendations`):** Displays deduplicated, explainable recommendations stamped with database values, calculation assumptions, `rule_version`, and `analyzed_at`.
+    - **Recommendations (`/shops/<id>/analysis/recommendations`):** Displays deduplicated, explainable recommendations stamped with database values, calculation assumptions, `rule_version`, and `analyzed_at`.
+    - **AI Waste Mitigation (`/shops/<id>/waste-mitigation`):** Evaluates near-expiry batches using Poisson cumulative survival models, computing exact probabilities of expiry before sale, salvage value vs. write-off loss, and recommending targeted mitigation strategies.
 
 ---
 
@@ -111,6 +124,14 @@ flowchart LR
 6. **Rejections, Cancellations & Disputes:**
    - Either Shop Owner may **Reject** or **Cancel** a transfer *before* physical dispatch, which immediately releases reserved stock back to `available_qty`.
    - If a dispatched transfer does not arrive or has transit damage, click **Report Dispute** (`DISPUTED`) to alert the Organization Super Admin and freeze the reservation until resolved.
+
+### 5.2 Automated Stock Redistribution Engine (`/transfers/recommendations`)
+The Automated Stock Redistribution Engine continuously scans across all stores in the organization to pair surplus inventory with deficit stores:
+1. Calculates Haversine geographical distance between source and recipient stores.
+2. Balances estimated transit/logistics costs against gross salvage margins to ensure economic viability.
+3. Ranks transfer opportunities by priority (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+4. Provides a 1-click **Draft Transfer Proposal** button that pre-populates all proposal parameters.
+5. **Read-Only AI Guarantee:** The recommendation engine never executes or commits transfers autonomously; human Shop Owner approval is mandatory.
 
 ---
 

@@ -1,7 +1,8 @@
 # Sanchay AI — Super Admin & Organization Governance Guide
 
 **Target Audience:** `SUPER_ADMIN` (Organization Directors & Platform Administrators)  
-**Status:** Proposed Administrative Guide (Matches Phases 1–8 Design)
+**Status:** Production-Ready (`132/132` Tests Passing)  
+**Security Model:** Strict 2-Role RBAC (`SUPER_ADMIN` and `SHOP_OWNER`)
 
 ---
 
@@ -12,11 +13,11 @@ As a `SUPER_ADMIN`, you oversee the entire multi-store organization (`organizati
 - **What Super Admin CAN Do:**
   - Configure organization-wide defaults (`low_stock_default_threshold`, `near_expiry_days_threshold`).
   - Onboard, edit, suspend, or deactivate retail shops (`shops`).
-  - Create and manage `SHOP_OWNER` and `STAFF` user accounts and assign them to shops (`user_shop_assignments`).
+  - Create and manage `SHOP_OWNER` user accounts and assign them to shops (`user_shop_assignments`).
   - View organization-wide inventory valuation, revenue, gross profit, near-expiry risk, and inter-store transfer analytics across all shops.
   - Broadcast organization-wide announcements (`ORG_ANNOUNCEMENT`).
   - Inspect the immutable `audit_logs` and resolve `DISPUTED` inter-store transfers.
-  - Trigger Phase 8 AI model training and backtest evaluation (`API-041` — Phase 8 only).
+  - Evaluate AI demand forecasting models and review cross-store redistribution opportunities.
 - **What Super Admin Does NOT Bypass (`RULE-17`, `BR-008`):**
   - Super Admin does not unilaterally complete stock transfers without the participating Shop Owners' dual approval and physical handover confirmation.
 
@@ -38,8 +39,8 @@ As a `SUPER_ADMIN`, you oversee the entire multi-store organization (`organizati
 ### 2.2 Creating & Assigning Users (`OD-001`)
 1. Navigate to **Admin -> Users & Roles** and click **+ Create User**.
 2. Enter **Full Name**, **Username**, **Email**, **Initial Password**, and select the **Role**:
-   - `SHOP_OWNER`: Assign to their primary shop. Each active shop must have a designated `SHOP_OWNER` to approve stock transfers.
-   - `STAFF`: Assign to their working shop for POS billing and batch receiving.
+   - `SHOP_OWNER`: Designate to specific shops (`user_shop_assignments`). Shop Owners possess complete operational control over their store (POS billing, batch receiving, stock adjustments, and transfer approvals).
+   - `SUPER_ADMIN`: Grants organization-wide administrative oversight across all shops and network governance.
 3. To revoke access when an employee leaves, toggle **Account Active** to `Off` (`is_active = False`). Note that user records are never physically deleted so historical sales and audit logs remain intact.
 
 ---

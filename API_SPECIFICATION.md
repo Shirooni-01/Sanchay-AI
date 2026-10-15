@@ -185,13 +185,16 @@ All state-changing endpoints on inventory, sales, and transfers acquire row-leve
 
 | ID | Method & Route | Allowed Roles | Description |
 | :--- | :--- | :--- | :--- |
-| **API-020** | `POST /api/v1/shops/{shop_id}/sales` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, `STAFF` | Create a POS sale with server-side authoritative price lookup, expiry sweep, and atomic FEFO batch deduction (`FR-030`, `BR-004`). Supports `X-Idempotency-Key` / `idempotency_key`. |
-| **API-021** | `GET /api/v1/shops/{shop_id}/sales` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, `STAFF` | List sales invoices with date range (`date_from`, `date_to`), `status`, `payment_mode`, and search (`q`) filters + financial/quantity `summary`. |
-| **API-021b** | `GET /api/v1/shops/{shop_id}/sales/summary` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, `STAFF` | Retrieve aggregated gross revenue, returns, net revenue, COGS, gross profit, and unit quantities for the filtered period (`BR-017`). |
-| **API-022** | `GET /api/v1/shops/{shop_id}/sales/{sale_id}` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, `STAFF` | Get full invoice details including FEFO batch breakdown (`allocations`), grouped `product_lines`, and `returns` history. |
-| **API-022b** | `GET /api/v1/shops/{shop_id}/sales/{sale_id}/receipt` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, `STAFF` | Retrieve structured receipt payload (`receipt_number`, shop header, cashier, line items, FEFO batch details, totals, and return/cancellation summary). |
-| **API-023** | `POST /api/v1/shops/{shop_id}/sales/{sale_id}/cancel` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, `STAFF` (same-day only) | Cancel a same-day completed sale (zero prior returns) and restore stock to original batches (`SALE_CANCELLATION` / `EXPIRED`). |
-| **API-024** | `POST /api/v1/shops/{shop_id}/sales/{sale_id}/returns` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, `STAFF` | Process partial or full item return (`RESELLABLE`, `DAMAGED`, or `EXPIRED` condition) with atomic stock bucket restoration and pro-rata refund calculation. |
+| **API-020** | `POST /api/v1/shops/{shop_id}/sales` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Create a POS sale with server-side authoritative price lookup, expiry sweep, and atomic FEFO batch deduction (`FR-030`, `BR-004`). Supports `X-Idempotency-Key` / `idempotency_key`. |
+| **API-020b** | `POST /api/v1/shops/{shop_id}/sales/offline-reconcile` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Batch reconcile offline queued POS bills with client UUID deduplication (`ALREADY_SYNCED`), atomic per-bill rollback, and isolated stockout conflict resolution (`CONFLICT_INSUFFICIENT_STOCK`). |
+| **API-021** | `GET /api/v1/shops/{shop_id}/sales` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | List sales invoices with date range (`date_from`, `date_to`), `status`, `payment_mode`, and search (`q`) filters + financial/quantity `summary`. |
+| **API-021b** | `GET /api/v1/shops/{shop_id}/sales/summary` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Retrieve aggregated gross revenue, returns, net revenue, COGS, gross profit, and unit quantities for the filtered period (`BR-017`). |
+| **API-022** | `GET /api/v1/shops/{shop_id}/sales/{sale_id}` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Get full invoice details including FEFO batch breakdown (`allocations`), grouped `product_lines`, and `returns` history. |
+| **API-022b** | `GET /api/v1/shops/{shop_id}/sales/{sale_id}/receipt` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Retrieve structured receipt payload (`receipt_number`, shop header, cashier, line items, FEFO batch details, totals, and return/cancellation summary). |
+| **API-022c** | `GET /shops/{shop_id}/sales/{sale_id}/thermal-slip` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Generate ESC/POS thermal receipt slip (supports 80mm & 58mm layouts with `autoprint=1` parameter). |
+| **API-022d** | `GET /shops/{shop_id}/sales/{sale_id}/tax-invoice` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Generate formal A4 Tax Invoice with GST breakdown, terms, and authorized signature section for PDF printing. |
+| **API-023** | `POST /api/v1/shops/{shop_id}/sales/{sale_id}/cancel` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` (same-day only) | Cancel a same-day completed sale (zero prior returns) and restore stock to original batches (`SALE_CANCELLATION` / `EXPIRED`). |
+| **API-024** | `POST /api/v1/shops/{shop_id}/sales/{sale_id}/returns` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Process partial or full item return (`RESELLABLE`, `DAMAGED`, or `EXPIRED` condition) with atomic stock bucket restoration and pro-rata refund calculation. |
 | **Guard** | `DELETE /api/v1/shops/{shop_id}/sales/{sale_id}` | Any | Always returns `409 Conflict` (`DESTRUCTIVE_DELETE_PROHIBITED`) to preserve financial and audit integrity (`RULE-17`). |
 
 #### Example: `API-020` (`POST /api/v1/shops/1/sales`) — Create POS Sale (FEFO)
@@ -274,22 +277,24 @@ All Phase 5 endpoints accept optional query parameters: `lookback_days` (`1..365
 | **API-025b** | `GET /api/v1/shops/{shop_id}/analysis/expiry-risk` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Batch-level FEFO expiry-risk analysis (`EXPIRED`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `NON_PERISHABLE`, `DEPLETED`, `INSUFFICIENT_DATA`) with optional `risk_level` and `only_near_expiry=1` filters. |
 | **API-025c** | `GET /api/v1/shops/{shop_id}/analysis/surplus` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Batch-level potential surplus candidates (`NEAR_EXPIRY_SURPLUS`, `OVERSTOCK_COVERAGE`) with cumulative retention and safety stock breakdown. |
 | **API-025d** | `GET /api/v1/shops/{shop_id}/analysis/low-stock` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Product-level low-stock and replenishment analysis (`OUT_OF_STOCK`, `LOW_STOCK`, `BELOW_SAFETY_STOCK`, `ADEQUATE`) with deficit and recommended replenishment quantities. |
-| **API-025e** | `GET /api/v1/shops/{shop_id}/analysis/recommendations` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Deduplicated rule-based recommendations (`MONITOR_NEAR_EXPIRY`, `REVIEW_SURPLUS`, `REPLENISHMENT_NEEDED`, `INSUFFICIENT_SALES_HISTORY`, `QUARANTINE_EXPIRED`) with explanations, DB values, assumptions, `rule_version`, and `analyzed_at`. |
-| **API-025f** | `GET /api/v1/shops/{shop_id}/analysis/products/{product_id}` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Detailed deterministic analysis for a single product in `{shop_id}` (velocity, stock summary, thresholds, FEFO batches, recommendations). |
-| **API-025g** | `GET /api/v1/shops/{shop_id}/analysis/batches/{batch_id}` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Detailed deterministic FEFO, expiry-risk, and surplus analysis for a single batch in `{shop_id}`. |
+| **API-025e** | `GET /api/v1/shops/{shop_id}/analysis/recommendations` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Deduplicated rule-based recommendations (`MONITOR_NEAR_EXPIRY`, `REVIEW_SURPLUS`, `REPLENISHMENT_NEEDED`, `INSUFFICIENT_SALES_HISTORY`, `QUARANTINE_EXPIRED`) with explanations, DB values, assumptions, `rule_version`, and `analyzed_at`. |
+| **API-025f** | `GET /api/v1/shops/{shop_id}/analysis/products/{product_id}` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Detailed deterministic analysis for a single product in `{shop_id}` (velocity, stock summary, thresholds, FEFO batches, recommendations). |
+| **API-025g** | `GET /api/v1/shops/{shop_id}/analysis/batches/{batch_id}` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Detailed deterministic FEFO, expiry-risk, and surplus analysis for a single batch in `{shop_id}`. |
+| **API-025h** | `GET /api/v1/shops/{shop_id}/waste-mitigation` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | AI waste mitigation engine: analyzes near-expiry batches, calculates Poisson survival probabilities, projected waste vs salvage value, and recommends mitigation actions. |
 
 ### Module E2: Inter-Store Stock Transfers (`Phase 6 — Implemented & Verified`)
 
 | ID | Method & Route | Allowed Roles | Description |
 | :--- | :--- | :--- | :--- |
 | **API-026** | `GET /api/v1/shops/{shop_id}/network-surplus-offers` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Scoped view (`OD-003`) of eligible surplus stock in sister shops that matches `{shop_id}`'s low-stock/demand needs (never exposes private sales or full inventory). |
+| **API-026b** | `GET /api/v1/shops/{shop_id}/transfers/redistribution-recommendations` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Automated multi-shop stock redistribution recommendations pairing surplus source batches with stockout shops, balancing Haversine transit costs against salvage margins. |
 | **API-027** | `POST /api/v1/transfers` | `SHOP_OWNER` (must own `source_shop_id` or `recipient_shop_id`) | Create a transfer proposal (`PENDING_RECIPIENT_APPROVAL` if source owner; `PENDING_SOURCE_APPROVAL` if recipient owner). |
-| **API-028** | `GET /api/v1/transfers` | `SUPER_ADMIN` (all), `SHOP_OWNER`/`STAFF` (transfers involving own shop) | List incoming and outgoing transfers with status filters. |
-| **API-029** | `GET /api/v1/transfers/{transfer_id}` | `SUPER_ADMIN`, Participating `SHOP_OWNER`/`STAFF` | View full transfer details and `transfer_status_logs` timeline. |
+| **API-028** | `GET /api/v1/transfers` | `SUPER_ADMIN` (all), `SHOP_OWNER` (transfers involving own shop) | List incoming and outgoing transfers with status filters. |
+| **API-029** | `GET /api/v1/transfers/{transfer_id}` | `SUPER_ADMIN`, Participating `SHOP_OWNER` | View full transfer details and `transfer_status_logs` timeline. |
 | **API-030** | `POST /api/v1/transfers/{transfer_id}/approve` | Counterparty `SHOP_OWNER` only | Record second Shop Owner approval, atomically reserve stock (`available_qty -> reserved_qty`), and transition to `APPROVED_RESERVED` (`BR-008`). |
 | **API-031** | `POST /api/v1/transfers/{transfer_id}/reject` | Counterparty `SHOP_OWNER` only | Reject pending/reserved transfer (`REJECTED`) and release any reservation (`BR-010`). |
 | **API-032** | `POST /api/v1/transfers/{transfer_id}/cancel` | Source or Recipient `SHOP_OWNER` | Cancel transfer prior to dispatch (`CANCELLED`) and release any reservation (`BR-010`). |
-| **API-033** | `POST /api/v1/transfers/{transfer_id}/dispatch` | Source `SHOP_OWNER` or Source `STAFF` | Confirm physical handover from `APPROVED_RESERVED` -> `DISPATCHED_IN_TRANSIT` (`BR-009`). |
+| **API-033** | `POST /api/v1/transfers/{transfer_id}/dispatch` | Source `SHOP_OWNER` | Confirm physical handover from `APPROVED_RESERVED` -> `DISPATCHED_IN_TRANSIT` (`BR-009`). |
 | **API-034** | `POST /api/v1/transfers/{transfer_id}/confirm-receipt` | Recipient `SHOP_OWNER` only | Confirm physical receipt from `DISPATCHED_IN_TRANSIT` -> `COMPLETED`; executes `TRANSFER_OUT` and `TRANSFER_IN` (`BR-009`, `BR-011`). |
 | **API-035** | `POST /api/v1/transfers/{transfer_id}/dispute` | Source or Recipient `SHOP_OWNER` | Flag an in-transit transfer as `DISPUTED` (non-receipt or discrepancy) or resolve via `RETURNED_TO_SOURCE` (`BR-016`). |
 
@@ -331,29 +336,30 @@ All Phase 5 endpoints accept optional query parameters: `lookback_days` (`1..365
 #### Phase 7 Notifications & Alerts (Implemented)
 | ID | Method & Route | Allowed Roles | Description | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **API-036** | `GET /api/v1/notifications` | Any Authenticated | List paginated notifications strictly scoped to authenticated user + unread count. Supports `is_read`, `type`, `page`, `per_page`. | **Phase 7 Implemented** |
-| **API-036a** | `GET /api/v1/notifications/unread-count` | Any Authenticated | Fast indexed count of unread notifications for navbar bell polling. | **Phase 7 Implemented** |
-| **API-037** | `POST /api/v1/notifications/{id}/read` | Any Authenticated (Owner Only) | Mark specific notification as read, validating recipient user ownership and recording `read_at`. | **Phase 7 Implemented** |
-| **API-037a** | `POST /api/v1/notifications/read-all` | Any Authenticated | Mark all unread notifications for authenticated user as read in bulk. | **Phase 7 Implemented** |
-| **API-037b** | `POST /api/v1/shops/{shop_id}/inventory/check-alerts` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Trigger on-demand shop low-stock and batch expiry alert evaluation with daily deduplication. | **Phase 7 Implemented** |
+| **API-036** | `GET /api/v1/notifications` | Any Authenticated | List paginated notifications strictly scoped to authenticated user + unread count. Supports `is_read`, `type`, `page`, `per_page`. | **Implemented** |
+| **API-036a** | `GET /api/v1/notifications/unread-count` | Any Authenticated | Fast indexed count of unread notifications for navbar bell polling. | **Implemented** |
+| **API-037** | `POST /api/v1/notifications/{id}/read` | Any Authenticated (Owner Only) | Mark specific notification as read, validating recipient user ownership and recording `read_at`. | **Implemented** |
+| **API-037a** | `POST /api/v1/notifications/read-all` | Any Authenticated | Mark all unread notifications for authenticated user as read in bulk. | **Implemented** |
+| **API-037b** | `POST /api/v1/shops/{shop_id}/inventory/check-alerts` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Trigger on-demand shop low-stock and batch expiry alert evaluation with daily deduplication. | **Implemented** |
 
 #### Phase 8 Analytics & Reports (Implemented & Verified)
 | ID | Method & Route | Allowed Roles | Description | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **API-038** | `GET /api/v1/reports/shop/{shop_id}/summary` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Shop financial & inventory operational KPIs (revenue, COGS, gross profit, stock valuation, transfer pipeline, alerts). | **Phase 8 Implemented** |
-| **API-039** | `GET /api/v1/reports/organization/summary` | `SUPER_ADMIN` | Organization-wide executive summary across all shops (shops breakdown, aggregate stock, profit margins). | **Phase 8 Implemented** |
-| **API-040** | `GET /api/v1/reports/export` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | RFC 4180 streaming CSV export (`type=SALES|INVENTORY|NEAR_EXPIRY|TRANSFERS`, filtered by date, shop, category). | **Phase 8 Implemented** |
-| **API-040a** | `GET /api/v1/reports/analytics/trends` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Daily/monthly revenue and profit trend series with zero-filled continuous date sequences. | **Phase 8 Implemented** |
-| **API-040b** | `GET /api/v1/reports/analytics/top-products` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Top-selling products ranked by sales revenue and quantity volume. | **Phase 8 Implemented** |
-| **API-040c** | `GET /api/v1/reports/analytics/stock-distribution` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Breakdown of stock value/quantity by category, batch status, and expiry risk horizons. | **Phase 8 Implemented** |
-| **API-040d** | `GET /api/v1/reports/analytics/transfers` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Inter-store transfer throughput, status distribution, and partner exchange metrics. | **Phase 8 Implemented** |
-| **API-040e** | `GET /api/v1/reports/analytics/data` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Tabular report dataset payload with summary statistics for the web reporting console. | **Phase 8 Implemented** |
+| **API-038** | `GET /api/v1/reports/shop/{shop_id}/summary` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Shop financial & inventory operational KPIs (revenue, COGS, gross profit, stock valuation, transfer pipeline, alerts). | **Implemented** |
+| **API-039** | `GET /api/v1/reports/organization/summary` | `SUPER_ADMIN` | Organization-wide executive summary across all shops (shops breakdown, aggregate stock, profit margins). | **Implemented** |
+| **API-040** | `GET /api/v1/reports/export` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | RFC 4180 streaming CSV export (`type=SALES|INVENTORY|NEAR_EXPIRY|TRANSFERS`, filtered by date, shop, category). | **Implemented** |
+| **API-040a** | `GET /api/v1/reports/analytics/trends` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Daily/monthly revenue and profit trend series with zero-filled continuous date sequences. | **Implemented** |
+| **API-040b** | `GET /api/v1/reports/analytics/top-products` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Top-selling products ranked by sales revenue and quantity volume. | **Implemented** |
+| **API-040c** | `GET /api/v1/reports/analytics/stock-distribution` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Breakdown of stock value/quantity by category, batch status, and expiry risk horizons. | **Implemented** |
+| **API-040d** | `GET /api/v1/reports/analytics/transfers` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Inter-store transfer throughput, status distribution, and partner exchange metrics. | **Implemented** |
+| **API-040e** | `GET /api/v1/reports/analytics/data` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Tabular report dataset payload with summary statistics for the web reporting console. | **Implemented** |
 
 ---
 
-### Module G: AI Inventory Intelligence (`PHASE 8 ONLY — DO NOT IMPLEMENT IN PHASES 1–7`)
+### Module G: AI Inventory Intelligence (`Implemented & Verified`)
 
 | ID | Method & Route | Allowed Roles | Description |
 | :--- | :--- | :--- | :--- |
 | **API-041** | `POST /api/v1/ai/train-and-evaluate` | `SUPER_ADMIN` | Trigger forecasting model training & backtest evaluation against baseline (`FR-061`). |
+| **API-041b** | `GET /api/v1/shops/{shop_id}/products/{product_id}/forecast` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Retrieve Ridge regression predictive demand forecast (7/14/30d), confidence intervals, and Poisson survival curves. |
 | **API-042** | `GET /api/v1/ai/shops/{shop_id}/recommendations` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Retrieve demand forecasts, batch expiry-risk scores, and explainable transfer recommendations (`FR-062` to `FR-065`). |

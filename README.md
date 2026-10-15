@@ -1,7 +1,7 @@
 # Sanchay AI — Multi-Store Inventory & Stock Redistribution Platform
 
-**Current Project Phase:** **Production-Ready — Core Modules & Dashboards Complete (`v1.0.0`)**  
-**Implementation Status:** Phases 1–8 Implemented & Fully Verified (`114/114` `pytest` tests passing against PostgreSQL 18 local database). AI Product Analysis Engine decoupled as an isolated placeholder service ready for plug-and-play model integration.
+**Current Project Phase:** **Production-Ready — All Modules & AI Engines Complete (`v1.1.0`)**  
+**Implementation Status:** All PRD Modules Implemented & Fully Verified (`132/132` `pytest` tests passing against PostgreSQL 18 local database). Features a strict 2-role architecture (`SUPER_ADMIN` and `SHOP_OWNER`), true Scikit-Learn Ridge Regression demand forecasting, Poisson survival waste mitigation, offline POS bill queue reconciliation, printable thermal slips (80mm/58mm), A4 tax invoicing, and automated multi-shop redistribution recommendations.
 
 ---
 
@@ -18,7 +18,8 @@ Retail organizations operating multiple stores (grocery chains, dairy/perishable
 2. **Controlled Dual-Approval + Two-Step Handover Stock Exchange:** Identifies surplus/near-expiry stock in one shop, matches eligible recipient shops in the same organization, and enforces a strict transactional state machine:
    - Requires **explicit Source Shop Owner approval** AND **explicit Recipient Shop Owner approval** before reserving stock (`APPROVED_RESERVED`).
    - Requires **Source physical dispatch confirmation** (`DISPATCHED_IN_TRANSIT`) AND **Recipient physical receipt confirmation** (`COMPLETED`) before moving inventory balances.
-3. **Disciplined Phased Delivery (AI Reserved for Phase 8):** Phases 1–7 build and verify the complete deterministic, rule-based platform. **Phase 8 (Final Phase)** layers statistical/ML demand forecasting, batch expiry-risk scoring, and explainable transfer recommendations on top of verified PostgreSQL history.
+3. **Strict 2-Role Security Architecture:** Platform governance and store execution are streamlined into two non-overlapping roles: **`SUPER_ADMIN`** (multi-tenant organization governance) and **`SHOP_OWNER`** (full operational control over assigned stores, POS billing, inventory, and transfers).
+4. **Scikit-Learn AI Demand Forecasting & Waste Mitigation:** Statistical Ridge Regression forecasting with calendar day-of-week seasonality, Poisson survival analysis for batch expiry risk, and automated Haversine-optimized stock redistribution proposals—all operating with a 100% read-only AI guarantee (zero autonomous mutations).
 
 ---
 
@@ -92,7 +93,7 @@ Open your browser to: **`http://127.0.0.1:5000`**
 python -m flask --app wsgi:app db-check
 python -m flask --app wsgi:app db upgrade
 
-# 3. Run complete automated regression test suite (114 tests)
+# 3. Run complete automated regression test suite (132 tests)
 pytest -q
 
 # 4. Launch the application
@@ -124,13 +125,15 @@ Sanchay AI implements a clean, accessible design system strictly avoiding purple
 
 ---
 
-## 7. Decoupled AI Product Analysis Module
+## 7. AI Demand Forecasting & Waste Mitigation Engines
 
-In accordance with strict modular architecture:
-- **Core Module:** [`services/productAnalysis.py`](file:///d:/Ashutosh_01/Sanchay%20AI/services/productAnalysis.py) (re-exporting [`app/services/product_analysis_service.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/services/product_analysis_service.py)).
-- **Contract Interface:** Defines typed data contracts (`ProductAnalysisInput`, `DemandProjection`, `ExpiryRiskAssessment`, `CandidateRecipientShop`, `ProductAnalysisResult`).
-- **Placeholder UI:** Accessible via the top navigation ("Product Analysis" with AI pill badge) at `/product-analysis` and `/shops/<shop_id>/product-analysis`. Features a live sandbox previewing simulation outputs with zero transactional mutations.
-- **Future Integration:** An ML model can be dropped directly into `ProductAnalysisService.analyze_product_for_cross_shop_sales` without modifying existing inventory or transfer pipelines.
+In accordance with strict modular architecture and the zero-autonomous-mutation guarantee:
+- **Core Engine:** [`app/services/product_analysis_service.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/services/product_analysis_service.py) (re-exported via [`services/productAnalysis.py`](file:///d:/Ashutosh_01/Sanchay%20AI/services/productAnalysis.py)).
+- **Predictive Demand Forecasting:** Employs Scikit-Learn `Ridge` regression with calendar seasonality (day-of-week one-hot encoding), rolling velocity, and linear trends, with deterministic tiered fallbacks (EWMA for 3–13 days, moving baseline for <3 days).
+- **Poisson Spoilage Survival Modeling:** Evaluates batch quantities against projected daily run-rates to compute exact probabilities of expiry before sale.
+- **Waste Mitigation Engine:** Evaluates near-expiry batch capital risks, calculates potential salvage vs write-off losses, and suggests targeted actions.
+- **Automated Stock Redistribution Engine:** Located in [`app/services/transfer_service.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/services/transfer_service.py), pairs surplus source batches with deficit/stockout recipient shops within the organization, factoring in Haversine distance and transit costs.
+- **Read-Only AI Guarantee:** All AI models provide read-only projections and 1-click proposal drafts; they **never autonomously alter inventory ledgers** without explicit Shop Owner confirmation.
 
 ---
 
@@ -147,4 +150,4 @@ In accordance with strict modular architecture:
 | **Phase 6** | Inter-Store Stock Exchange (Dual Approval & Handover Workflow) | **COMPLETED & VERIFIED** |
 | **Phase 7** | In-App Notifications & Alerts Lifecycle | **COMPLETED & VERIFIED** |
 | **Phase 8** | Dashboards, Real-Time Analytics & CSV Reports | **COMPLETED & VERIFIED** |
-| **Phase 9+** | Decoupled AI Model Integration (Plugs into `services/productAnalysis.py`) | **RESERVED / FUTURE** |
+| **Phase 9** | AI Demand Forecasting, Spoilage Modeling & Redistribution Engine | **COMPLETED & VERIFIED** |

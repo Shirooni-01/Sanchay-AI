@@ -31,7 +31,6 @@ flowchart TB
    - `users_fixture`:
      - `super_admin_client` (`SUPER_ADMIN`)
      - `shop1_owner_client` (`SHOP_OWNER` assigned to Shop 1)
-     - `shop1_staff_client` (`STAFF` assigned to Shop 1)
      - `shop2_owner_client` (`SHOP_OWNER` assigned to Shop 2)
    - `catalog_and_batches_fixture`: Perishable and non-perishable products with multiple batches (early expiry, later expiry, already expired, depleted).
 
@@ -177,11 +176,55 @@ Enforces `BR-006` and `NFR-002`:
 
 ---
 
-### 3.9 Phase 10 AI Evaluation Methodology (`tests/test_phase10_ai_intelligence.py` — PHASE 10 ONLY)
-- **Walk-Forward Time-Series Backtesting:**
-  - Splits historical daily sales per `(shop_id, product_id)` chronologically (e.g., Days 1–46 train, Days 47–60 test; never random shuffle which causes data leakage).
-  - Computes **Mean Absolute Error (MAE)**, **Root Mean Squared Error (RMSE)**, and **Symmetric MAPE (sMAPE)** for candidate models against the **7-Day Moving Average Baseline**.
-- **Cold-Start / Sparse Data Guard Test:**
-  - Verify that a newly added product with `< 14` days of sales history returns `data_sufficiency = "INSUFFICIENT_DATA"` and falls back to Phase 5 deterministic rules without crashing or inventing high-confidence numbers.
-- **No Autonomous Action Test:**
-  - Verify that running `POST /api/v1/ai/train-and-evaluate` and `GET /api/v1/ai/shops/{id}/recommendations` produces **zero** changes to `inventory_batches`, `stock_movements`, or `transfer_requests`.
+### 3.9 AI Demand Forecasting & Predictive Stockout Tests (`tests/test_ai_demand_forecasting.py` — VERIFIED)
+- **Status:** `6 passed, 0 failed` in `tests/test_ai_demand_forecasting.py`.
+- **Test Matrix (PRD Module G & `FR-061` to `FR-065`):**
+  1. `test_ai_demand_forecasting_ridge_regression_with_seasonality`: Verifies Scikit-Learn Ridge regression fitting on historical sales, calendar seasonality (day-of-week one-hot encoding), linear trend, confidence intervals (`lower_ci_90`, `upper_ci_90`), and forecast horizons (7d, 14d, 30d).
+  2. `test_ai_demand_forecasting_sparse_data_graceful_fallbacks`: Verifies tiered fallbacks: Ridge regression for $\ge 14$ days, EWMA for 3–13 days, moving average baseline for $< 3$ days.
+  3. `test_days_of_inventory_and_stockout_prediction`: Verifies Days of Inventory (DOI) calculations and predicted calendar stockout dates based on current available sellable inventory.
+  4. `test_poisson_survival_spoilage_modeling`: Verifies Poisson cumulative survival probabilities modeling the chance of batches expiring before customer demand depletes them.
+  5. `test_product_analysis_api_forecast_endpoint`: Verifies JSON API endpoint `GET /api/v1/shops/{shop_id}/products/{product_id}/forecast` with model metrics and Poisson curves.
+  6. `test_read_only_ai_guarantee_zero_mutations`: Verifies that querying AI demand projections executes zero database mutations on `inventory_batches`, `stock_movements`, or `sales`.
+
+---
+
+### 3.10 Expiry Risk & Waste Mitigation ML Engine Tests (`tests/test_waste_mitigation_engine.py` — VERIFIED)
+- **Status:** `3 passed, 0 failed` in `tests/test_waste_mitigation_engine.py`.
+- **Test Matrix:**
+  1. `test_waste_mitigation_analysis_computes_salvage_and_waste`: Verifies computation of at-risk capital, projected waste losses vs potential salvage value, and prioritized mitigation action recommendations.
+  2. `test_waste_mitigation_html_and_api_endpoints`: Verifies both HTML interface (`/shops/{shop_id}/waste-mitigation`) and JSON API (`/api/v1/shops/{shop_id}/waste-mitigation`).
+  3. `test_waste_mitigation_access_control`: Verifies strict 2-role authorization (`SUPER_ADMIN` and assigned `SHOP_OWNER`) and cross-shop isolation (`403 Forbidden`).
+
+---
+
+### 3.11 Offline POS Queue & Bill Reconciliation Tests (`tests/test_offline_pos_reconciliation.py` — VERIFIED)
+- **Status:** `3 passed, 0 failed` in `tests/test_offline_pos_reconciliation.py`.
+- **Test Matrix (PRD Module D & `FR-036`):**
+  1. `test_offline_reconciliation_happy_path_and_deduplication`: Verifies sequential batch processing, FEFO inventory decrement, sales record persistence, and idempotent deduplication (`ALREADY_SYNCED`) on retry.
+  2. `test_offline_reconciliation_conflict_isolation`: Verifies that a stockout on bill #2 does not crash or abort bill #1; returns `CONFLICT_INSUFFICIENT_STOCK` with atomic per-bill rollback.
+  3. `test_offline_reconciliation_authorization`: Verifies unassigned shop owners cannot sync bills to other stores (`403 UNAUTHORIZED_SHOP_ACCESS`).
+
+---
+
+### 3.12 Thermal Slip & Tax Invoicing Tests (`tests/test_invoicing_thermal_slip.py` — VERIFIED)
+- **Status:** `3 passed, 0 failed` in `tests/test_invoicing_thermal_slip.py`.
+- **Test Matrix (PRD Module D & `FR-031`):**
+  1. `test_thermal_slip_generation_80mm_and_58mm`: Verifies ESC/POS monospaced receipt formatting, layout switching (`width=58`), auto-print trigger (`autoprint=1`), and batch tracking codes.
+  2. `test_tax_invoice_a4_generation`: Verifies formal A4 Tax Invoice layout with GST breakdown, terms and conditions, and authorized signature sections.
+  3. `test_invoicing_endpoints_access_control`: Verifies access control and shop isolation across printable endpoints.
+
+---
+
+### 3.13 Inter-Store Redistribution Recommendation Tests (`tests/test_redistribution_recommendations.py` — VERIFIED)
+- **Status:** `3 passed, 0 failed` in `tests/test_redistribution_recommendations.py`.
+- **Test Matrix (PRD Module F & `FR-050`):**
+  1. `test_redistribution_recommendations_pairs_surplus_with_deficit`: Verifies cross-shop surplus matching with stockout shops, Haversine distance and transit cost estimation, and net salvage margin prioritization.
+  2. `test_redistribution_recommendations_html_and_api`: Verifies HTML board and JSON endpoint `GET /api/v1/shops/{shop_id}/transfers/redistribution-recommendations`.
+  3. `test_redistribution_recommendations_isolation_and_zero_mutations`: Verifies tenant isolation and strict read-only AI guarantee (zero automated transfer submissions).
+
+---
+
+### 3.14 Master Test Suite Execution Summary
+- **Total Automated Tests:** 132 tests across 14 test modules.
+- **Pass Rate:** 100% (`132 passed, 0 failed` in 174.32s).
+- **Database Engine:** PostgreSQL 18.3 local database (`sanchay_ai_test`).

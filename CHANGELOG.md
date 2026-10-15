@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.1.0] — 2026-10-15 (Strict 2-Role RBAC, AI Demand Forecasting, Waste Mitigation, Offline POS Sync, Invoicing & Stock Redistribution)
+
+### Added & Enhanced
+- **Strict 2-Role Security Architecture (`SUPER_ADMIN` and `SHOP_OWNER`):**
+  - Streamlined RBAC by completely removing the `STAFF` role across migrations (`0007_two_roles.py`), SQLAlchemy models (`User`, `Organization`), service layer, form validators, HTML templates, and CLI tools.
+  - Shop Owners have complete operational control over their assigned stores: catalog pricing, batch inwarding, POS counter checkout, offline sync, stock adjustments, and dual-approval transfers.
+- **Scikit-Learn AI Demand Forecasting & Predictive Stockout Engine:**
+  - Implemented `ProductAnalysisService` in [`app/services/product_analysis_service.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/services/product_analysis_service.py) with Ridge regression, calendar seasonality (day-of-week one-hot encoding), linear trend, and rolling sales velocity.
+  - Tiered fallback: Ridge regression for $\ge 14$ days, EWMA for 3–13 days, moving average baseline for $< 3$ days.
+  - Projections across 7-day, 14-day, and 30-day forecast horizons with $90\%$ confidence intervals.
+  - Days of Inventory (DOI) computation and predicted calendar date of stockout.
+  - Added REST API endpoint: `GET /api/v1/shops/<shop_id>/products/<product_id>/forecast`.
+  - Verified with 6 tests in [`tests/test_ai_demand_forecasting.py`](file:///d:/Ashutosh_01/Sanchay%20AI/tests/test_ai_demand_forecasting.py).
+- **Poisson Survival Modeling & Waste Mitigation Engine:**
+  - Added `analyze_shop_waste_mitigation` computing batch-level Poisson cumulative survival probabilities modeling the chance of expiry before sale.
+  - Calculates at-risk inventory capital, projected waste losses vs potential salvage value, and recommends prioritized actions (promotional markdowns, inter-shop transfers, bundling).
+  - Web view at `/shops/<shop_id>/waste-mitigation` and JSON API `GET /api/v1/shops/<shop_id>/waste-mitigation`.
+  - Verified with 3 tests in [`tests/test_waste_mitigation_engine.py`](file:///d:/Ashutosh_01/Sanchay%20AI/tests/test_waste_mitigation_engine.py).
+- **Offline POS Counter Queue & Reconciliation:**
+  - Added `SalesService.reconcile_offline_sales` and REST endpoint `POST /api/v1/shops/<shop_id>/sales/offline-reconcile`.
+  - Handles client UUID deduplication (`ALREADY_SYNCED`), atomic FEFO batch deductions, and isolated per-bill stockout conflict resolution (`CONFLICT_INSUFFICIENT_STOCK`).
+  - Verified with 3 tests in [`tests/test_offline_pos_reconciliation.py`](file:///d:/Ashutosh_01/Sanchay%20AI/tests/test_offline_pos_reconciliation.py).
+- **Printable Invoices: Thermal Slips & A4 Tax Invoices:**
+  - Added ESC/POS monospaced thermal slip (`GET /shops/<shop_id>/sales/<sale_id>/thermal-slip`) supporting 80mm and 58mm layouts (`?width=58`) with optional auto-print query parameter (`?autoprint=1`).
+  - Added formal A4 Tax Invoice (`GET /shops/<shop_id>/sales/<sale_id>/tax-invoice`) with GST breakdown, terms, and authorized signatory blocks.
+  - Linked new formats in receipt and invoice views.
+  - Verified with 3 tests in [`tests/test_invoicing_thermal_slip.py`](file:///d:/Ashutosh_01/Sanchay%20AI/tests/test_invoicing_thermal_slip.py).
+- **Automated Stock Redistribution Recommendation Engine:**
+  - Added `TransferService.get_redistribution_recommendations` pairing surplus source batches with stockout shops within the organization.
+  - Evaluates Haversine geographical distance and transit costs against gross salvage margins to prioritize transfers (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+  - 1-click proposal creation pre-filling transfer parameters with strict read-only AI guarantee.
+  - Web view at `/shops/<shop_id>/transfers/recommendations` and JSON API `GET /api/v1/shops/<shop_id>/transfers/redistribution-recommendations`.
+  - Verified with 3 tests in [`tests/test_redistribution_recommendations.py`](file:///d:/Ashutosh_01/Sanchay%20AI/tests/test_redistribution_recommendations.py).
+- **Full Automated Test Suite:**
+  - 100% pass rate: **132 passed, 0 failed** in `pytest`.
+
+---
+
 ## [1.0.0] — 2026-10-15 (Production Polish, Design System Overhaul & Decoupled Product Analysis Module)
 
 ### Added & Enhanced

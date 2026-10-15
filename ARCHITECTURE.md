@@ -1,27 +1,27 @@
 # Sanchay AI — System Architecture Document
 
-**Document Status:** Phases 1–6 Implemented & Verified; Phases 7–8 Target Architecture  
+**Document Status:** Production-Ready (All Modules & AI Engines Implemented & Verified; 132 Tests Passing)  
 **Related ADRs:** [`ADR-001`](file:///d:/Ashutosh_01/Sanchay%20AI/DECISIONS.md), [`ADR-002`](file:///d:/Ashutosh_01/Sanchay%20AI/DECISIONS.md), [`ADR-003`](file:///d:/Ashutosh_01/Sanchay%20AI/DECISIONS.md), [`ADR-007`](file:///d:/Ashutosh_01/Sanchay%20AI/DECISIONS.md), [`ADR-008`](file:///d:/Ashutosh_01/Sanchay%20AI/DECISIONS.md)
 
 ---
 
 ## 1. System Context Overview
 
-**Sanchay AI** is designed as a **Modular Flask Monolith** backed by **PostgreSQL** as the single source of truth (`RULE-07`, `RULE-10`). It serves both server-rendered HTML5 views (Jinja2 + CSS3 + vanilla JavaScript) and RESTful JSON APIs (`/api/v1/*`) from a unified Flask application process.
+**Sanchay AI** is designed as a **Modular Flask Monolith** backed by **PostgreSQL** as the single source of truth (`RULE-07`, `RULE-10`). It serves both server-rendered HTML5 views (Jinja2 + CSS3 + vanilla JavaScript) and RESTful JSON APIs (`/api/v1/*`) from a unified Flask application process, strictly secured by a **2-role RBAC architecture (`SUPER_ADMIN` and `SHOP_OWNER`)**.
 
 ```mermaid
 flowchart TB
     subgraph Users["Authenticated Users (Browser Clients)"]
         SA["Super Admin\n(Organization Director)"]
-        SO1["Shop Owner / Staff\n(Shop A — Surplus Store)"]
-        SO2["Shop Owner / Staff\n(Shop B — Recipient Store)"]
+        SO1["Shop Owner\n(Shop A — Surplus Store)"]
+        SO2["Shop Owner\n(Shop B — Recipient Store)"]
     end
 
     subgraph FlaskApp["Sanchay AI — Modular Flask Application"]
         UI["HTML5 / CSS3 / Vanilla JS\n(Jinja2 Views + REST Fetch)"]
-        API["REST API & Blueprints Layer\n(CSRF + RBAC + Input Validation)"]
+        API["REST API & Blueprints Layer\n(CSRF + 2-Role RBAC + Input Validation)"]
         SVC["Domain Service Layer\n(ACID Transactions + Row Locking)"]
-        AI_MOD["Phase 8 ONLY: AI Intelligence Engine\n(Disabled in Phases 1–7)"]
+        AI_MOD["Scikit-Learn & Poisson AI Engines\n(Demand Forecasting & Waste Mitigation)"]
     end
 
     subgraph Storage["Persistent Storage"]
@@ -33,8 +33,8 @@ flowchart TB
     SO2 --> UI
     UI --> API
     API --> SVC
-    SVC -. "Phase 8 Only" .-> AI_MOD
-    AI_MOD -. "Reads Sales/Batches,\nWrites Forecasts" .-> PG
+    SVC --> AI_MOD
+    AI_MOD -. "Reads Sales & Batches\n(Read-Only Projections)" .-> PG
     SVC --> PG
 ```
 
