@@ -160,3 +160,15 @@ def create_app(
     register_cli_commands(app)
 
     return app
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy module-level attribute resolution.
+
+    Enables deployment servers (like Render's default `gunicorn app:app`)
+    to acquire the application instance seamlessly without executing it
+    during test collection or plain imports.
+    """
+    if name == "app":
+        return create_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
