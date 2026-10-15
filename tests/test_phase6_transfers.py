@@ -155,13 +155,13 @@ def _setup_phase6_topology(app: Flask) -> dict:
             email="staff_a@sanchay.local",
             password="ValidPassword123",
             full_name="Staff Shop A",
-            role="STAFF",
+            role="SHOP_OWNER",
             organization_id=org1.id,
         )
         MembershipService.assign_user_to_shop(
             actor=admin,
             shop_id=shop_a.id,
-            payload={"user_id": staff_a.id, "assignment_role": "STAFF", "is_primary": True},
+            payload={"user_id": staff_a.id, "assignment_role": "SHOP_OWNER", "is_primary": False},
         )
 
         owner_b = AuthService.create_user(

@@ -1,7 +1,7 @@
 # Sanchay AI — Multi-Store Inventory & Stock Redistribution Platform
 
-**Current Project Phase:** **Phase 7 — Notifications & Alerts (Completed)**  
-**Implementation Status:** Phases 1, 2, 3, 4, 5, 6 & 7 Implemented & Verified (`97/97` `pytest` tests passing against PostgreSQL 18 local database). Phase 8 (Dashboards & Reports) pending sequential user approval.
+**Current Project Phase:** **Production-Ready — Core Modules & Dashboards Complete (`v1.0.0`)**  
+**Implementation Status:** Phases 1–8 Implemented & Fully Verified (`114/114` `pytest` tests passing against PostgreSQL 18 local database). AI Product Analysis Engine decoupled as an isolated placeholder service ready for plug-and-play model integration.
 
 ---
 
@@ -73,36 +73,70 @@ Retail organizations operating multiple stores (grocery chains, dairy/perishable
 
 ---
 
-## 5. Quick Reference: Verified Windows Setup Commands (Phases 1–5)
+## 5. Running the Application (Single Documented Command)
 
-Full instructions are in [`DEVELOPMENT_SETUP.md`](file:///d:/Ashutosh_01/Sanchay%20AI/DEVELOPMENT_SETUP.md):
+Once dependencies and PostgreSQL are configured, run the production-grade application on Windows with a single command:
 
 ```powershell
-# 1. Create and activate virtual environment
-python -m venv .venv
+.\.venv\Scripts\python -m flask --app wsgi:app run --host=127.0.0.1 --port=5000
+```
+
+Open your browser to: **`http://127.0.0.1:5000`**
+
+### Initial Setup & Verification (PowerShell)
+```powershell
+# 1. Activate Python virtual environment
 .\.venv\Scripts\Activate.ps1
 
-# 2. Install dependencies & configure environment
-pip install -r requirements.txt
-Copy-Item .env.example .env
-
-# 3. Verify PostgreSQL connectivity & apply migrations
+# 2. Verify database connection and apply migrations
 python -m flask --app wsgi:app db-check
 python -m flask --app wsgi:app db upgrade
 
-# 4. Safely create an initial Super Admin & Organization via CLI
-python -m flask --app wsgi:app create-user --username admin_user --email admin@sanchay.local --full-name "System Admin" --role SUPER_ADMIN --org-code SANCHAY_ORG --org-name "Sanchay Retail Co-op"
+# 3. Run complete automated regression test suite (114 tests)
+pytest -q
 
-# 5. Run automated pytest suite & start server
-pytest --cov=app --cov-report=term-missing -v
+# 4. Launch the application
 python -m flask --app wsgi:app run --host=127.0.0.1 --port=5000
 ```
 
 ---
 
-## 6. Sequential Implementation Roadmap Summary
+## 6. Design System & Color Tokens
 
-| Phase | Name | Current Status |
+Sanchay AI implements a clean, accessible design system strictly avoiding purple/violet gradients and generic SaaS blues:
+
+- **Theme Palette (Tokens defined centrally in `app/static/css/main.css`):**
+  - **Dark Mode (Default):**
+    - Background: `#0F1412` (Deep green-black)
+    - Surface: `#171E1B`
+    - Elevated Surface: `#1F2824`
+    - Border: `#2C3733`
+    - Text Primary: `#ECF1EE` | Secondary: `#9AA9A2`
+    - Primary Accent: `#2DD4A0` (Emerald) | Hover: `#25B88B`
+    - Secondary Accent: `#F5B544` (Amber for highlights/warnings)
+    - Danger: `#EF6B5B` | Success: `#4ADE80` | Info: `#5EC4D9`
+  - **Light Mode (Warm Off-White):**
+    - Background: `#F6F4EF` (Warm off-white)
+    - Surface: `#FFFFFF`
+    - Ink / Primary Text: `#1B2420`
+    - Same Emerald (`#2DD4A0`) and Amber (`#F5B544`) accents
+  - **Theme Switcher:** Navbar toggle button with animated Sun/Moon icons, persisted in `localStorage` and executed synchronously in `<head>` to prevent flash-of-unstyled-theme.
+
+---
+
+## 7. Decoupled AI Product Analysis Module
+
+In accordance with strict modular architecture:
+- **Core Module:** [`services/productAnalysis.py`](file:///d:/Ashutosh_01/Sanchay%20AI/services/productAnalysis.py) (re-exporting [`app/services/product_analysis_service.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/services/product_analysis_service.py)).
+- **Contract Interface:** Defines typed data contracts (`ProductAnalysisInput`, `DemandProjection`, `ExpiryRiskAssessment`, `CandidateRecipientShop`, `ProductAnalysisResult`).
+- **Placeholder UI:** Accessible via the top navigation ("Product Analysis" with AI pill badge) at `/product-analysis` and `/shops/<shop_id>/product-analysis`. Features a live sandbox previewing simulation outputs with zero transactional mutations.
+- **Future Integration:** An ML model can be dropped directly into `ProductAnalysisService.analyze_product_for_cross_shop_sales` without modifying existing inventory or transfer pipelines.
+
+---
+
+## 8. Implementation Roadmap Summary
+
+| Phase | Name | Status |
 | :--- | :--- | :--- |
 | **Phase 0** | Repository Audit and Documentation Baseline | **COMPLETED** |
 | **Phase 1** | Project Foundation, Configuration, Database, and Authentication | **COMPLETED & VERIFIED** |
@@ -110,6 +144,7 @@ python -m flask --app wsgi:app run --host=127.0.0.1 --port=5000
 | **Phase 3** | Product Catalog, Inventory, Batches, and Expiry Tracking | **COMPLETED & VERIFIED** |
 | **Phase 4** | Sales, Billing, and Transaction History (FEFO POS) | **COMPLETED & VERIFIED** |
 | **Phase 5** | Rule-Based Stock Analysis (Velocity, Expiry Risk, Surplus & Recommendations) | **COMPLETED & VERIFIED** |
-| **Phase 6** | Inter-Store Stock Exchange (Dual Approval & Handover Workflow) | Pending Approval |
-| **Phase 7** | Notifications, Dashboards, Analytics, Reports & Demo Readiness | Pending Phase 6 |
-| **Phase 8** | **AI Inventory Intelligence and Model Evaluation (FINAL PHASE ONLY)** | Pending Phase 7 |
+| **Phase 6** | Inter-Store Stock Exchange (Dual Approval & Handover Workflow) | **COMPLETED & VERIFIED** |
+| **Phase 7** | In-App Notifications & Alerts Lifecycle | **COMPLETED & VERIFIED** |
+| **Phase 8** | Dashboards, Real-Time Analytics & CSV Reports | **COMPLETED & VERIFIED** |
+| **Phase 9+** | Decoupled AI Model Integration (Plugs into `services/productAnalysis.py`) | **RESERVED / FUTURE** |

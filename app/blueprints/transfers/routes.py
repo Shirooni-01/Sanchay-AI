@@ -104,7 +104,7 @@ def transfers_hub_redirect():
 
 @transfers_bp.route("/shops/<int:shop_id>/transfers", methods=["GET"])
 @login_required
-@require_shop_access(required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"})
+@require_shop_access(required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"})
 def shop_transfers_list(shop_id: int):
     """Transfer management hub showing incoming, outgoing, pending, and completed transfers."""
     shop = g.current_shop
@@ -175,6 +175,31 @@ def shop_transfers_list(shop_id: int):
         ready_to_dispatch=ready_to_dispatch,
         in_transit_incoming=in_transit_incoming,
         today=get_business_today(),
+    )
+
+
+@transfers_bp.route("/shops/<int:shop_id>/transfers/recommendations", methods=["GET"])
+@login_required
+@require_shop_access(required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"})
+def shop_redistribution_recommendations_page(shop_id: int):
+    """Render the Automated Multi-Shop Stock Redistribution Dashboard (PRD Module F)."""
+    shop = g.current_shop
+    user = current_user
+    accessible_shops = user.get_accessible_shops(include_inactive=False)
+
+    max_dist = request.args.get("max_dist", default=100.0, type=float)
+    recommendations = TransferService.get_redistribution_recommendations(
+        actor=user,
+        shop_id=shop.id,
+        max_distance_km=max_dist,
+    )
+
+    return render_template(
+        "transfers/redistribution_recommendations.html",
+        shop=shop,
+        accessible_shops=accessible_shops,
+        recommendations=recommendations,
+        max_dist=max_dist,
     )
 
 
@@ -274,7 +299,7 @@ def create_transfer_form_action(shop_id: int):
 
 @transfers_bp.route("/shops/<int:shop_id>/transfers/<int:transfer_id>", methods=["GET"])
 @login_required
-@require_shop_access(required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"})
+@require_shop_access(required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"})
 def transfer_detail_page(shop_id: int, transfer_id: int):
     """View transfer details, batch info, status audit timeline, and action buttons."""
     shop = g.current_shop
@@ -289,8 +314,6 @@ def transfer_detail_page(shop_id: int, transfer_id: int):
     }
     is_source_owner = is_admin or user_roles_by_shop.get(transfer.source_shop_id) == "SHOP_OWNER"
     is_recipient_owner = is_admin or user_roles_by_shop.get(transfer.recipient_shop_id) == "SHOP_OWNER"
-    is_source_staff = is_admin or transfer.source_shop_id in user_roles_by_shop
-    is_recipient_staff = is_admin or transfer.recipient_shop_id in user_roles_by_shop
 
     can_approve = False
     if transfer.status == "PENDING_RECIPIENT_APPROVAL" and is_recipient_owner:
@@ -308,7 +331,7 @@ def transfer_detail_page(shop_id: int, transfer_id: int):
         if is_source_owner or is_recipient_owner or transfer.initiated_by_user_id == current_user.id:
             can_cancel = True
 
-    can_dispatch = (transfer.status == "APPROVED_RESERVED") and (is_source_owner or is_source_staff)
+    can_dispatch = (transfer.status == "APPROVED_RESERVED") and is_source_owner
     can_receive = (transfer.status == "DISPATCHED_IN_TRANSIT") and is_recipient_owner
 
     return render_template(
@@ -526,6 +549,33 @@ def api_get_network_surplus_offers(shop_id: int):
             )
 
     return jsonify({"success": True, "data": {"surplus_offers": surplus_offers}}), 200
+
+
+@transfers_bp.route("/api/v1/shops/<int:shop_id>/transfers/redistribution-recommendations", methods=["GET"])
+@login_required
+@require_shop_access(required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"})
+def api_redistribution_recommendations(shop_id: int):
+    """API: Return multi-shop stock balancing recommendations (PRD Module F)."""
+    max_dist = request.args.get("max_distance_km", default=100.0, type=float)
+    recs = TransferService.get_redistribution_recommendations(
+        actor=current_user,
+        shop_id=shop_id,
+        max_distance_km=max_dist,
+    )
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": {
+                    "shop_id": shop_id,
+                    "count": len(recs),
+                    "recommendations": recs,
+                },
+                "meta": {"timestamp": _utc_iso()},
+            }
+        ),
+        200,
+    )
 
 
 @transfers_bp.route("/api/v1/transfers", methods=["POST"])

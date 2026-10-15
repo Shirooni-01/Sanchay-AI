@@ -519,7 +519,7 @@ class TestInputValidationAndFailureCases:
                     email="valid@sanchay.local",
                     password="alllowercase123",
                     full_name="Valid Name",
-                    role="STAFF",
+                    role="SHOP_OWNER",
                 )
 
     def test_duplicate_username_or_email_rejected_with_409(
@@ -532,7 +532,7 @@ class TestInputValidationAndFailureCases:
                     email="unique_other@sanchay.local",
                     password="ValidPassword123",
                     full_name="Duplicate Username",
-                    role="STAFF",
+                    role="SHOP_OWNER",
                 )
             assert dup_user_exc.value.http_status == 409
 
@@ -542,7 +542,7 @@ class TestInputValidationAndFailureCases:
                     email=active_user["email"].upper(),
                     password="ValidPassword123",
                     full_name="Duplicate Email",
-                    role="STAFF",
+                    role="SHOP_OWNER",
                 )
             assert dup_email_exc.value.http_status == 409
 
@@ -689,7 +689,7 @@ class TestInputValidationAndFailureCases:
                 "--full-name",
                 "X",
                 "--role",
-                "STAFF",
+                "SHOP_OWNER",
                 "--password",
                 "weak",
             ]

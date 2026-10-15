@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+
+{% block title %}Reports &amp; Analytics &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Reports &amp; Analytics Hub</h1>
+        <p class="page-subtitle">
+            Deterministic business intelligence, operational reporting, and audit-ready data export.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('reports.api_export_report', type=report_type, shop_id=selected_shop_id or '', start_date=start_date, end_date=end_date, category=selected_category or '', format='csv') }}" 
+           class="btn btn-primary btn-sm" id="export-csv-btn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: text-bottom;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export to CSV
+        </a>
+        <a href="{{ url_for('admin.dashboard_page') }}" class="btn btn-outline btn-sm">Return to Dashboard</a>
+    </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- Filter Bar -->
+<!-- ======================================================================= -->
+<section class="card" style="margin-bottom: 1.5rem;">
+    <form method="GET" action="{{ url_for('reports.reports_page') }}" class="filter-form">
+        <div class="filter-group">
+            <label for="report-type-select">Report Type</label>
+            <select name="type" id="report-type-select" class="form-control form-control-sm" style="min-width: 150px;">
+                <option value="SALES" {% if report_type == 'SALES' %}selected{% endif %}>Sales &amp; Revenue</option>
+                <option value="INVENTORY" {% if report_type == 'INVENTORY' %}selected{% endif %}>Inventory Valuation</option>
+                <option value="NEAR_EXPIRY" {% if report_type == 'NEAR_EXPIRY' %}selected{% endif %}>Near-Expiry Risk</option>
+                <option value="TRANSFERS" {% if report_type == 'TRANSFERS' %}selected{% endif %}>Stock Transfers</option>
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="shop-select">Shop Scope</label>
+            <select name="shop_id" id="shop-select" class="form-control form-control-sm" style="min-width: 170px;">
+                {% if user.role == 'SUPER_ADMIN' %}
+                    <option value="" {% if not selected_shop_id %}selected{% endif %}>All Shops (Org-Wide)</option>
+                {% endif %}
+                {% for s in shops %}
+                    <option value="{{ s.id }}" {% if selected_shop_id == s.id %}selected{% endif %}>
+                        {{ s.name }} ({{ s.code }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="start-date-input">Start Date</label>
+            <input type="date" name="start_date" id="start-date-input" value="{{ start_date }}" class="form-control form-control-sm">
+        </div>
+
+        <div class="filter-group">
+            <label for="end-date-input">End Date</label>
+            <input type="date" name="end_date" id="end-date-input" value="{{ end_date }}" class="form-control form-control-sm">
+        </div>
+
+        {% if categories %}
+        <div class="filter-group">
+            <label for="category-select">Category</label>
+            <select name="category" id="category-select" class="form-control form-control-sm" style="min-width: 140px;">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                    <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        <div class="filter-group" style="margin-left: auto;">
+            <label>&nbsp;</label>
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="submit" class="btn btn-primary btn-sm" id="apply-filters-btn">Apply Filters</button>
+                <a href="{{ url_for('reports.reports_page') }}" class="btn btn-outline btn-sm">Reset</a>
+            </div>
+        </div>
+    </form>
+</section>
+
+<!-- ======================================================================= -->
+<!-- Report Summary Banner -->
+<!-- ======================================================================= -->
+{% if report and report.summary %}
+<div class="report-summary-bar">
+    <div class="report-summary-item">
+        <span class="report-summary-label">Scope</span>
+        <strong class="report-summary-value" style="font-size: 1rem;">{{ report.scope }}</strong>
+    </div>
+
+    {% if report.report_type == 'SALES' %}
+        <div class="report-summary-item">
+            <span class="report-summary-label">Completed Invoices</span>
+            <strong class="report-summary-value">{{ report.summary.completed_sales_count or 0 }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Gross Revenue</span>
+            <strong class="report-summary-value">&#8377;{{ '{:,.2f}'.format(report.summary.total_gross_revenue or 0) }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">COGS</span>
+            <strong class="report-summary-value">&#8377;{{ '{:,.2f}'.format(report.summary.total_cogs or 0) }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Gross Profit</span>
+            <strong class="report-summary-value" style="color: #166534;">&#8377;{{ '{:,.2f}'.format(report.summary.total_gross_profit or 0) }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Gross Margin</span>
+            <strong class="report-summary-value">{{ report.summary.gross_margin_pct or 0 }}%</strong>
+        </div>
+
+    {% elif report.report_type == 'INVENTORY' %}
+        <div class="report-summary-item">
+            <span class="report-summary-label">Products Listed</span>
+            <strong class="report-summary-value">{{ report.summary.total_records or 0 }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Total Stock Units</span>
+            <strong class="report-summary-value">{{ report.summary.total_stock_units or 0 }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Total Valuation</span>
+            <strong class="report-summary-value">&#8377;{{ '{:,.2f}'.format(report.summary.total_inventory_valuation or 0) }}</strong>
+        </div>
+
+    {% elif report.report_type == 'NEAR_EXPIRY' %}
+        <div class="report-summary-item">
+            <span class="report-summary-label">At-Risk Batches</span>
+            <strong class="report-summary-value" style="color: #991b1b;">{{ report.summary.total_records or 0 }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">At-Risk Units</span>
+            <strong class="report-summary-value">{{ report.summary.total_at_risk_units or 0 }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Valuation At Risk</span>
+            <strong class="report-summary-value" style="color: #991b1b;">&#8377;{{ '{:,.2f}'.format(report.summary.total_at_risk_valuation or 0) }}</strong>
+        </div>
+
+    {% elif report.report_type == 'TRANSFERS' %}
+        <div class="report-summary-item">
+            <span class="report-summary-label">Total Transfers</span>
+            <strong class="report-summary-value">{{ report.summary.total_records or 0 }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Completed</span>
+            <strong class="report-summary-value" style="color: #166534;">{{ report.summary.completed_count or 0 }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Transferred Units</span>
+            <strong class="report-summary-value">{{ report.summary.total_transfer_units or 0 }}</strong>
+        </div>
+        <div class="report-summary-item">
+            <span class="report-summary-label">Transfer Value</span>
+            <strong class="report-summary-value">&#8377;{{ '{:,.2f}'.format(report.summary.total_transfer_value or 0) }}</strong>
+        </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- ======================================================================= -->
+<!-- Tabular Report View -->
+<!-- ======================================================================= -->
+<section class="card" style="margin-bottom: 2rem;">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">{{ report_type.replace('_', ' ').title() }} Report</h2>
+            <p class="card-subtitle">
+                Filtered from <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong> &bull; {{ report.rows | length }} records retrieved.
+            </p>
+        </div>
+    </div>
+
+    {% if report and report.rows %}
+    <div class="table-responsive">
+        <table class="data-table" id="report-data-table">
+            <thead>
+                <tr>
+                    {% for col in report.columns %}
+                        <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in report.rows %}
+                <tr>
+                    {% for key, val in row.items() %}
+                        <td>
+                            {% if key == 'status' or key == 'batch_status' %}
+                                {% if val == 'COMPLETED' or val == 'ACTIVE' %}
+                                    <span class="badge-active">{{ val }}</span>
+                                {% elif val in ('EXPIRED', 'CANCELLED', 'REJECTED', 'DAMAGED') %}
+                                    <span class="badge-inactive">{{ val }}</span>
+                                {% else %}
+                                    <span class="badge-warning">{{ val }}</span>
+                                {% endif %}
+                            {% elif key in ('total', 'subtotal', 'discount', 'cogs', 'gross_profit', 'valuation', 'avg_cost', 'selling_price', 'purchase_cost', 'valuation_at_risk', 'unit_price', 'total_value') %}
+                                &#8377;{{ '{:,.2f}'.format(val) }}
+                            {% elif key == 'invoice_number' or key == 'transfer_code' or key == 'batch_code' or key == 'sku' %}
+                                <code>{{ val }}</code>
+                            {% elif key == 'days_left' %}
+                                {% if val <= 7 %}
+                                    <span class="badge-risk-critical">{{ val }} days</span>
+                                {% elif val <= 30 %}
+                                    <span class="badge-risk-warning">{{ val }} days</span>
+                                {% else %}
+                                    <span class="badge-risk-safe">{{ val }} days</span>
+                                {% endif %}
+                            {% else %}
+                                {{ val }}
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding: 2.5rem 1rem; text-align: center;">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" style="margin-bottom: 0.75rem;">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <p style="font-weight: 600; color: #475569; margin: 0 0 0.25rem 0;">No records found for the selected criteria</p>
+        <p style="color: #94a3b8; font-size: 0.88rem; margin: 0;">Try adjusting your date range, shop selector, or report filters.</p>
+    </div>
+    {% endif %}
+</section>
+
+<!-- ======================================================================= -->
+<!-- Embedded Analytics & Charts Grid -->
+<!-- ======================================================================= -->
+<h2 class="section-title" style="margin: 2rem 0 1rem 0; font-size: 1.25rem; font-weight: 700;">Operational Analytics Visualizations</h2>
+<div class="grid-2-col">
+    <!-- Chart 1: 30-Day Sales Trend -->
+    <div class="chart-card">
+        <div class="chart-card-header">
+            <div>
+                <h3 class="chart-title">30-Day Daily Sales Revenue</h3>
+                <p class="chart-subtitle">Real PostgreSQL transactional totals (INR)</p>
+            </div>
+        </div>
+        <div class="chart-container" id="sales-trend-chart-box">
+            <!-- Rendered by SanchayCharts -->
+        </div>
+    </div>
+
+    <!-- Chart 2: Inventory Distribution by Category -->
+    <div class="chart-card">
+        <div class="chart-card-header">
+            <div>
+                <h3 class="chart-title">Stock Quantity by Category</h3>
+                <p class="chart-subtitle">Product volume breakdown across categories</p>
+            </div>
+        </div>
+        <div class="chart-container" id="category-distribution-chart-box">
+            <!-- Rendered by SanchayCharts -->
+        </div>
+    </div>
+
+    <!-- Chart 3: Top-Selling Products by Revenue -->
+    <div class="chart-card">
+        <div class="chart-card-header">
+            <div>
+                <h3 class="chart-title">Best-Selling Products by Revenue</h3>
+                <p class="chart-subtitle">Top revenue-generating catalog items</p>
+            </div>
+        </div>
+        <div id="top-products-chart-box" style="padding-top: 0.5rem;">
+            <!-- Rendered by SanchayCharts -->
+        </div>
+    </div>
+
+    <!-- Chart 4: Transfer Activity Breakdown -->
+    <div class="chart-card">
+        <div class="chart-card-header">
+            <div>
+                <h3 class="chart-title">Inter-Store Transfer Status Breakdown</h3>
+                <p class="chart-subtitle">Redistribution lifecycle throughput</p>
+            </div>
+        </div>
+        <div id="transfers-activity-chart-box" style="padding-top: 0.5rem;">
+            <!-- Rendered by SanchayCharts -->
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // 1. Render Sales Trend Line Chart
+    var salesTrends = {{ sales_trends | tojson }};
+    if (salesTrends && salesTrends.length > 0) {
+        window.SanchayCharts.renderTrendLineChart('sales-trend-chart-box', salesTrends, { valueKey: 'revenue' });
+    } else {
+        document.getElementById('sales-trend-chart-box').innerHTML = '<div class="empty-state">No sales transactions recorded in this period.</div>';
+    }
+
+    // 2. Render Stock Category Donut Chart
+    var stockDist = {{ stock_distribution | tojson }};
+    if (stockDist && stockDist.by_category && stockDist.by_category.length > 0) {
+        window.SanchayCharts.renderDonutChart('category-distribution-chart-box', stockDist.by_category, 'quantity', 'category');
+    } else {
+        document.getElementById('category-distribution-chart-box').innerHTML = '<div class="empty-state">No inventory stock available.</div>';
+    }
+
+    // 3. Render Top Products Horizontal Bars
+    var topProducts = {{ top_products | tojson }};
+    if (topProducts && topProducts.by_revenue && topProducts.by_revenue.length > 0) {
+        window.SanchayCharts.renderHorizontalBars('top-products-chart-box', topProducts.by_revenue, 'revenue', 'product_name', {
+            prefix: '₹',
+            color: '#10b981'
+        });
+    } else {
+        document.getElementById('top-products-chart-box').innerHTML = '<div class="empty-state">No product sales recorded yet.</div>';
+    }
+
+    // 4. Render Transfer Activity
+    var transferData = {{ transfer_activity | tojson }};
+    if (transferData && transferData.breakdown && transferData.breakdown.length > 0) {
+        window.SanchayCharts.renderHorizontalBars('transfers-activity-chart-box', transferData.breakdown, 'count', 'status', {
+            suffix: ' transfers',
+            color: '#8b5cf6'
+        });
+    } else {
+        document.getElementById('transfers-activity-chart-box').innerHTML = '<div class="empty-state">No inter-store transfer proposals created yet.</div>';
+    }
+});
+</script>
+{% endblock %}

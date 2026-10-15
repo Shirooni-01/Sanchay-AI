@@ -39,13 +39,8 @@ def api_login_with_csrf(
     password: str = "ValidPassword123",
 ) -> str:
     """Authenticate a test client via JSON API and return the active CSRF token."""
+    client.environ_base.pop("HTTP_X_CSRFTOKEN", None)
     login_page = client.get("/auth/login")
-    if login_page.status_code == 302:
-        landing = client.get("/")
-        active_csrf = extract_csrf_token(landing.get_data(as_text=True))
-        client.post("/api/v1/auth/logout", headers={"X-CSRFToken": active_csrf})
-        login_page = client.get("/auth/login")
-
     csrf_token = extract_csrf_token(login_page.get_data(as_text=True))
 
     resp = client.post(
@@ -139,13 +134,13 @@ def multi_tenant_topology(app: Flask) -> dict:
             },
         )
         staff_a1 = MembershipService.create_member_user(
-            actor=owner_a1,
+            actor=admin_a,
             payload={
                 "username": "staff_a1",
                 "email": "staff_a1@sanchay.local",
                 "password": "ValidPassword123",
                 "full_name": "Anil Staff A1",
-                "role": "STAFF",
+                "role": "SHOP_OWNER",
                 "shop_id": shop_a1.id,
             },
         )
@@ -514,7 +509,7 @@ class TestDeactivatedShopAndOrgRestrictions:
             f"/api/v1/shops/{shop_a1_id}/assignments",
             json={
                 "user_id": multi_tenant_topology["owner_a2_id"],
-                "assignment_role": "STAFF",
+                "assignment_role": "SHOP_OWNER",
             },
             headers={"X-CSRFToken": csrf_admin},
         )
@@ -654,7 +649,7 @@ class TestRolesAndMembership:
         assert update_staff.status_code == 200
         assert update_staff.get_json()["data"]["user"]["full_name"] == "Anil Kumar Updated"
 
-    def test_shop_owner_scoped_to_assigned_shops_and_can_manage_only_staff(
+    def test_shop_owner_scoped_to_assigned_shops_and_cannot_create_users(
         self, client: FlaskClient, multi_tenant_topology: dict
     ):
         csrf_owner = api_login_with_csrf(client, "owner_a1")
@@ -672,7 +667,7 @@ class TestRolesAndMembership:
         assert users_resp.status_code == 200
         assert len(users_resp.get_json()["data"]["users"]) >= 2
 
-        # Owner A1 can create a new STAFF member for Shop A1
+        # In 2-role system, ONLY Super Admin can create user accounts; Shop Owner is blocked
         create_staff_resp = client.post(
             "/api/v1/users",
             json={
@@ -680,48 +675,21 @@ class TestRolesAndMembership:
                 "email": "cashier_a1@sanchay.local",
                 "password": "ValidPassword123",
                 "full_name": "Kiran Cashier",
-                "role": "STAFF",
-                "shop_id": shop_a1_id,
-            },
-            headers={"X-CSRFToken": csrf_owner},
-        )
-        assert create_staff_resp.status_code == 201
-        created_staff = create_staff_resp.get_json()["data"]["user"]
-        assert created_staff["role"] == "STAFF"
-        assert created_staff["assigned_shops"][0]["shop_id"] == shop_a1_id
-
-        # Owner A1 can deactivate/reactivate their shop's STAFF member
-        deact_staff = client.patch(
-            f"/api/v1/users/{created_staff['id']}",
-            json={"is_active": False},
-            headers={"X-CSRFToken": csrf_owner},
-        )
-        assert deact_staff.status_code == 200
-        assert deact_staff.get_json()["data"]["user"]["is_active"] is False
-
-        # Owner A1 CANNOT promote staff to SHOP_OWNER
-        promote_attempt = client.patch(
-            f"/api/v1/users/{created_staff['id']}",
-            json={"role": "SHOP_OWNER"},
-            headers={"X-CSRFToken": csrf_owner},
-        )
-        assert promote_attempt.status_code == 403
-
-        # Owner A1 CANNOT create a SHOP_OWNER or SUPER_ADMIN
-        escalate_resp = client.post(
-            "/api/v1/users",
-            json={
-                "username": "illegal_owner",
-                "email": "illegal@sanchay.local",
-                "password": "ValidPassword123",
-                "full_name": "Illegal Owner",
                 "role": "SHOP_OWNER",
                 "shop_id": shop_a1_id,
             },
             headers={"X-CSRFToken": csrf_owner},
         )
-        assert escalate_resp.status_code == 403
-        assert escalate_resp.get_json()["error"]["code"] == "INSUFFICIENT_ROLE_PERMISSION"
+        assert create_staff_resp.status_code == 403
+        assert create_staff_resp.get_json()["error"]["code"] == "INSUFFICIENT_ROLE_PERMISSION"
+
+        # Owner A1 CANNOT deactivate or edit other users
+        deact_staff = client.patch(
+            f"/api/v1/users/{multi_tenant_topology['staff_a1_id']}",
+            json={"is_active": False},
+            headers={"X-CSRFToken": csrf_owner},
+        )
+        assert deact_staff.status_code == 403
 
         # Owner A1 CANNOT create a new shop
         create_shop_resp = client.post(
@@ -738,57 +706,27 @@ class TestRolesAndMembership:
         )
         assert create_shop_resp.status_code == 403
 
-    def test_staff_restricted_to_assigned_shop_and_cannot_elevate_role_or_manage_users(
+    def test_shop_owner_restricted_from_admin_privileges(
         self, client: FlaskClient, multi_tenant_topology: dict
     ):
         csrf_staff = api_login_with_csrf(client, "staff_a1")
         shop_a1_id = multi_tenant_topology["shop_a1_id"]
         staff_id = multi_tenant_topology["staff_a1_id"]
 
-        # Staff sees only assigned Shop A1
+        # Shop Owner sees only assigned Shop A1
         shops_resp = client.get("/api/v1/shops")
         assert shops_resp.status_code == 200
         shops = shops_resp.get_json()["data"]["shops"]
         assert len(shops) == 1
         assert shops[0]["id"] == shop_a1_id
 
-        # Staff can view their assigned shop details
+        # Shop Owner can view their assigned shop details
         shop_detail = client.get(f"/api/v1/shops/{shop_a1_id}")
         assert shop_detail.status_code == 200
-        assert shop_detail.get_json()["data"]["shop"]["my_assignment_role"] == "STAFF"
-        # Staff does not receive personnel assignment management list
-        assert "assignments" not in shop_detail.get_json()["data"]["shop"]
+        # Shop Owner receives personnel assignment list
+        assert "assignments" in shop_detail.get_json()["data"]["shop"]
 
-        # Staff CANNOT edit shop details
-        staff_edit_shop = client.patch(
-            f"/api/v1/shops/{shop_a1_id}",
-            json={"name": "Staff Renamed Shop"},
-            headers={"X-CSRFToken": csrf_staff},
-        )
-        assert staff_edit_shop.status_code == 403
-        assert (
-            staff_edit_shop.get_json()["error"]["code"]
-            == "INSUFFICIENT_ROLE_PERMISSION"
-        )
-
-        # Staff CANNOT list users or create users
-        assert client.get("/api/v1/users").status_code == 403
-        assert (
-            client.post(
-                "/api/v1/users",
-                json={
-                    "username": "staff_created",
-                    "email": "sc@sanchay.local",
-                    "password": "ValidPassword123",
-                    "full_name": "Nope",
-                    "role": "STAFF",
-                },
-                headers={"X-CSRFToken": csrf_staff},
-            ).status_code
-            == 403
-        )
-
-        # Staff CANNOT elevate their own role to SUPER_ADMIN or SHOP_OWNER
+        # Shop Owner CANNOT elevate their own role to SUPER_ADMIN
         self_elevate = client.patch(
             f"/api/v1/users/{staff_id}",
             json={"role": "SUPER_ADMIN"},
@@ -796,6 +734,22 @@ class TestRolesAndMembership:
         )
         assert self_elevate.status_code == 403
         assert self_elevate.get_json()["error"]["code"] == "INSUFFICIENT_ROLE_PERMISSION"
+
+        # Shop Owner CANNOT create users
+        assert (
+            client.post(
+                "/api/v1/users",
+                json={
+                    "username": "owner_created",
+                    "email": "oc@sanchay.local",
+                    "password": "ValidPassword123",
+                    "full_name": "Nope",
+                    "role": "SHOP_OWNER",
+                },
+                headers={"X-CSRFToken": csrf_staff},
+            ).status_code
+            == 403
+        )
 
 
 # ============================================================================
@@ -851,12 +805,12 @@ class TestTenantAndShopIsolationSecurity:
             patch_other_shop.get_json()["error"]["code"] == "UNAUTHORIZED_SHOP_ACCESS"
         )
 
-        # 3. Assigning staff to Shop A2 is rejected with 403 UNAUTHORIZED_SHOP_ACCESS
+        # 3. Assigning user to Shop A2 is rejected with 403 UNAUTHORIZED_SHOP_ACCESS
         assign_other_shop = client.post(
             f"/api/v1/shops/{shop_a2_id}/assignments",
             json={
                 "user_id": multi_tenant_topology["staff_a1_id"],
-                "assignment_role": "STAFF",
+                "assignment_role": "SHOP_OWNER",
             },
             headers={"X-CSRFToken": csrf_owner_a1},
         )
@@ -1064,7 +1018,7 @@ class TestPhase2HtmlViewsAndCli:
                 "username": "form_staff_01",
                 "email": "form_staff_01@sanchay.local",
                 "full_name": "Form Staff Member",
-                "role": "STAFF",
+                "role": "SHOP_OWNER",
                 "shop_id": str(shop_a1_id),
                 "password": "ValidPassword123",
             },
@@ -1202,7 +1156,7 @@ class TestPhase2HtmlViewsAndCli:
             data={
                 "csrf_token": detail_csrf,
                 "user_id": str(staff_a1_id),
-                "assignment_role": "STAFF",
+                "assignment_role": "SHOP_OWNER",
                 "is_primary": "false",
             },
             follow_redirects=True,

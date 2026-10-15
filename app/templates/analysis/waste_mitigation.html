@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block title %}AI Waste Mitigation &amp; Expiry Salvage &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div style="display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary); border: 1px solid rgba(45, 212, 160, 0.35); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 999px;">
+                AI Engine &bull; Module G
+            </span>
+            <span style="font-size: 0.85rem; color: var(--color-text-muted);">Waste Prevention &amp; Salvage Optimization</span>
+        </div>
+        <h1 class="page-title">AI Waste Mitigation &amp; Markdown Engine &mdash; {{ shop.name }}</h1>
+        <p class="page-subtitle">
+            Probabilistic Poisson survival modeling to identify at-risk batches before expiration and prescribe optimal revenue salvage actions (Local Promotional Markdowns vs Inter-Store Transfers).
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('analysis.overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Deterministic Risk Overview</a>
+        <a href="{{ url_for('analysis.product_analysis_placeholder_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Single Product Simulation</a>
+        <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-primary btn-sm">Transfers Dashboard</a>
+    </div>
+</div>
+
+<!-- Filter & Sensitivity Controls -->
+<form method="GET" action="{{ url_for('analysis.shop_waste_mitigation_page', shop_id=shop.id) }}" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1.5rem; padding: 1rem; background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+    <div>
+        <label for="lookback_days" style="display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.3rem;">Lookback Window (Days):</label>
+        <select name="lookback_days" id="lookback_days" class="form-control" style="min-width: 140px;">
+            <option value="7" {% if lookback_days == 7 %}selected{% endif %}>7 Days</option>
+            <option value="14" {% if lookback_days == 14 %}selected{% endif %}>14 Days (Default)</option>
+            <option value="30" {% if lookback_days == 30 %}selected{% endif %}>30 Days</option>
+        </select>
+    </div>
+    <div>
+        <label for="max_days" style="display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.3rem;">Max Shelf Life Horizon:</label>
+        <select name="max_days" id="max_days" class="form-control" style="min-width: 160px;">
+            <option value="14" {% if max_days == 14 %}selected{% endif %}>Next 14 Days</option>
+            <option value="30" {% if max_days == 30 %}selected{% endif %}>Next 30 Days</option>
+            <option value="45" {% if max_days == 45 %}selected{% endif %}>Next 45 Days (Default)</option>
+            <option value="90" {% if max_days == 90 %}selected{% endif %}>Next 90 Days</option>
+        </select>
+    </div>
+    <div>
+        <button type="submit" class="btn btn-primary btn-sm">Re-evaluate Waste Risks</button>
+    </div>
+</form>
+
+<!-- KPI Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <div class="card" style="margin: 0; border-top: 3px solid var(--color-danger);">
+        <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Total Capital at Spoilage Risk</span>
+        <strong style="font-size: 1.45rem; color: var(--color-danger);">&#8377;{{ '{:,.2f}'.format(summary.total_capital_at_risk) }}</strong>
+        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+            {{ summary.total_projected_waste_units }} units projected unsold
+        </span>
+    </div>
+
+    <div class="card" style="margin: 0; border-top: 3px solid var(--color-primary);">
+        <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Potential Salvage Recovery Value</span>
+        <strong style="font-size: 1.45rem; color: var(--color-primary);">&#8377;{{ '{:,.2f}'.format(summary.potential_salvage_recovery_value) }}</strong>
+        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+            Via Markdowns &amp; Rebalancing
+        </span>
+    </div>
+
+    <div class="card" style="margin: 0; border-top: 3px solid var(--color-secondary);">
+        <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Batches Requiring Action</span>
+        <strong style="font-size: 1.45rem; color: var(--color-secondary);">{{ summary.total_at_risk_batches }}</strong>
+        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+            Out of {{ summary.total_active_batches }} active batches
+        </span>
+    </div>
+
+    <div class="card" style="margin: 0; border-top: 3px solid var(--color-info);">
+        <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Prescribed Action Mix</span>
+        <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.35rem;">
+            <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary);">{{ summary.action_breakdown.get('DISCOUNT_LOCALLY', 0) }} Markdowns</span>
+            <span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary);">{{ summary.action_breakdown.get('OFFER_TRANSFER', 0) }} Transfers</span>
+        </div>
+    </div>
+</div>
+
+<!-- Action 1: Recommended Markdowns -->
+{% if summary.recommended_markdowns %}
+<section class="card" style="margin-bottom: 1.5rem; border-left: 4px solid var(--color-secondary);">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title" style="color: var(--color-text);">Recommended Promotional Markdowns</h2>
+            <p class="card-subtitle">
+                Batches with imminent expiration where inter-store transfer is non-viable. Apply these local discounts immediately to maximize cash salvage before spoilage.
+            </p>
+        </div>
+        <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary); font-weight: 700;">
+            {{ summary.recommended_markdowns | length }} Markdowns Active
+        </span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Product &amp; SKU</th>
+                    <th>Batch</th>
+                    <th>Expiry &amp; Days Left</th>
+                    <th>Available</th>
+                    <th>Original Price</th>
+                    <th>Recommended Discount</th>
+                    <th>New Promo Price</th>
+                    <th>Projected Salvage</th>
+                    <th>Urgency</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in summary.recommended_markdowns %}
+                <tr>
+                    <td>
+                        <strong>{{ m.product_name }}</strong><br>
+                        <code style="font-size: 0.75rem;">{{ m.sku }}</code>
+                    </td>
+                    <td><code>{{ m.batch_code }}</code></td>
+                    <td>
+                        {{ m.expiry_date }}<br>
+                        {% if m.days_to_expiry <= 3 %}
+                            <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--color-danger); font-weight: 700;">{{ m.days_to_expiry }} days left</span>
+                        {% else %}
+                            <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary);">{{ m.days_to_expiry }} days left</span>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ m.available_qty }}</strong></td>
+                    <td>&#8377;{{ '{:,.2f}'.format(m.original_selling_price) }}</td>
+                    <td>
+                        <strong style="color: var(--color-secondary); font-size: 1.05rem;">
+                            {{ m.suggested_discount_percent }}% OFF
+                        </strong>
+                    </td>
+                    <td>
+                        <strong style="color: var(--color-primary); font-size: 1.05rem;">
+                            &#8377;{{ '{:,.2f}'.format(m.suggested_markdown_price) }}
+                        </strong>
+                    </td>
+                    <td>
+                        <strong style="color: var(--color-primary);">&#8377;{{ '{:,.2f}'.format(m.projected_salvage_revenue) }}</strong>
+                    </td>
+                    <td>
+                        {% if m.markdown_urgency == 'IMMEDIATE' %}
+                            <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--color-danger); font-weight: 700;">IMMEDIATE</span>
+                        {% else %}
+                            <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary);">SCHEDULED</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<!-- Action 2: Recommended Inter-Store Transfers -->
+{% if summary.recommended_transfers %}
+<section class="card" style="margin-bottom: 1.5rem; border-left: 4px solid var(--color-primary);">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title" style="color: var(--color-text);">Inter-Store Rebalancing Opportunities</h2>
+            <p class="card-subtitle">
+                Sister shops experiencing high sales velocity that can absorb your surplus stock before expiration at positive net salvage profit.
+            </p>
+        </div>
+        <span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary); font-weight: 700;">
+            {{ summary.recommended_transfers | length }} Transfer Opportunities
+        </span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Product &amp; SKU</th>
+                    <th>Batch</th>
+                    <th>Surplus Qty</th>
+                    <th>Days Left</th>
+                    <th>Destination Sister Shop</th>
+                    <th>Projected Net Salvage</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in summary.recommended_transfers %}
+                <tr>
+                    <td>
+                        <strong>{{ t.product_name }}</strong><br>
+                        <code style="font-size: 0.75rem;">{{ t.sku }}</code>
+                    </td>
+                    <td><code>{{ t.batch_code }}</code></td>
+                    <td><strong style="color: var(--color-primary);">{{ t.surplus_units }} units</strong></td>
+                    <td>{{ t.days_to_expiry }} days</td>
+                    <td>
+                        <strong>{{ t.target_shop_name }}</strong> (<code>{{ t.target_shop_code }}</code>)
+                    </td>
+                    <td>
+                        <strong style="color: var(--color-primary); font-size: 1.05rem;">
+                            &#8377;{{ '{:,.2f}'.format(t.projected_net_salvage) }}
+                        </strong>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('transfers.new_transfer_form', shop_id=shop.id) }}" class="btn btn-primary btn-sm">
+                            Initiate Transfer &rarr;
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<!-- All Evaluated At-Risk Batches -->
+<section class="card">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">All Evaluated Inventory Batches</h2>
+            <p class="card-subtitle">
+                Complete Poisson survival risk ranking for all batches in {{ shop.name }} expiring within {{ max_days }} days.
+            </p>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--color-text-muted);">
+            Evaluated at {{ summary.analyzed_at }}
+        </div>
+    </div>
+
+    {% if summary.at_risk_batches %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Batch</th>
+                    <th>Product</th>
+                    <th>Expiry Date</th>
+                    <th>Days Left</th>
+                    <th>Available</th>
+                    <th>Projected Unsold</th>
+                    <th>P(Spoilage)</th>
+                    <th>Capital at Risk</th>
+                    <th>Recommended Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in summary.at_risk_batches %}
+                <tr>
+                    <td><code>{{ b.batch_code }}</code></td>
+                    <td>
+                        <strong>{{ b.product_name }}</strong><br>
+                        <code style="font-size: 0.75rem;">{{ b.sku }}</code>
+                    </td>
+                    <td>{{ b.expiry_date }}</td>
+                    <td>
+                        {% if b.days_to_expiry <= 5 %}
+                            <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--color-danger); font-weight: 700;">{{ b.days_to_expiry }}d</span>
+                        {% elif b.days_to_expiry <= 14 %}
+                            <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary); font-weight: 700;">{{ b.days_to_expiry }}d</span>
+                        {% else %}
+                            <span>{{ b.days_to_expiry }}d</span>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ b.available_qty }}</strong></td>
+                    <td>
+                        {% if b.projected_unsold_units > 0 %}
+                            <strong style="color: var(--color-danger);">{{ b.projected_unsold_units }} units</strong>
+                        {% else %}
+                            <span style="color: var(--color-primary);">0</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ (b.poisson_spoilage_probability * 100) | round(1) }}%</td>
+                    <td>
+                        {% if b.at_risk_cost_value > 0 %}
+                            <strong style="color: var(--color-danger);">&#8377;{{ '{:,.2f}'.format(b.at_risk_cost_value) }}</strong>
+                        {% else %}
+                            <span>&#8377;0.00</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if b.recommended_action == 'OFFER_TRANSFER' %}
+                            <span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary); font-weight: 700;">OFFER TRANSFER</span>
+                        {% elif b.recommended_action == 'DISCOUNT_LOCALLY' %}
+                            <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary); font-weight: 700;">DISCOUNT {{ b.suggested_discount_percent }}%</span>
+                        {% else %}
+                            <span class="badge" style="background: var(--color-surface-elevated); color: var(--color-text-muted);">RETAIN</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding: 2.5rem; text-align: center;">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--color-primary); margin-bottom: 0.75rem;">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+        <h4 style="margin: 0 0 0.35rem 0; color: var(--color-text);">No Batches at Risk of Expiry</h4>
+        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+            All current active batches in this shop are projected to sell through fully based on current sales velocity.
+        </p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

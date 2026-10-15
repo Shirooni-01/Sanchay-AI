@@ -1418,7 +1418,7 @@ class StockAnalysisService:
             user=actor,
             shop_id=shop_id,
             allow_inactive=True,
-            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
         )
         cleaned = validate_analysis_params(
             lookback_days_raw=lookback_days,

@@ -214,7 +214,7 @@
     <div class="card-header">
         <h2 class="card-title">Shop Personnel &amp; Role Assignments</h2>
         <p class="card-subtitle">
-            Manage Shop Owners and Staff assigned to {{ shop.name }}.
+            Manage Shop Owners assigned to {{ shop.name }}.
         </p>
     </div>
 
@@ -246,7 +246,7 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if user.role == 'SUPER_ADMIN' or a.assignment_role == 'STAFF' %}
+                        {% if user.role == 'SUPER_ADMIN' %}
                         <form action="{{ url_for('admin.update_shop_assignment_action', shop_id=shop.id, assignment_id=a.id) }}" method="POST" class="inline-form">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="is_active" value="{{ 'false' if a.is_active else 'true' }}">
@@ -281,10 +281,7 @@
         <div class="form-group">
             <label for="assign_role" class="form-label">Shop Role</label>
             <select id="assign_role" name="assignment_role" class="form-input" required>
-                <option value="STAFF">STAFF</option>
-                {% if user.role == 'SUPER_ADMIN' %}
-                    <option value="SHOP_OWNER">SHOP_OWNER</option>
-                {% endif %}
+                <option value="SHOP_OWNER" selected>SHOP_OWNER</option>
             </select>
         </div>
         <div class="form-group">

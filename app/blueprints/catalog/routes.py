@@ -65,7 +65,7 @@ def catalog_Entry_redirect():
 @catalog_bp.route("/shops/<int:shop_id>/products", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def shop_products_page(shop_id: int):
     """Render the shop-scoped Product Catalog listing and manual creation page."""
@@ -162,7 +162,7 @@ def create_shop_product_action(shop_id: int):
 @catalog_bp.route("/shops/<int:shop_id>/products/<int:shop_product_id>", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def shop_product_detail_page(shop_id: int, shop_product_id: int):
     """Render the detailed view and edit form for a specific shop product."""
@@ -364,7 +364,7 @@ def api_delete_org_product(product_id: int):
 @catalog_bp.route("/api/v1/shops/<int:shop_id>/products", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_list_shop_products(shop_id: int):
     """API-013: Paginated list of shop products with reconciled stock totals."""
@@ -453,7 +453,7 @@ def api_create_shop_product(shop_id: int):
 )
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_get_shop_product(shop_id: int, shop_product_id: int):
     """Retrieve a single shop product with reconciled stock summary, batches, and movements."""

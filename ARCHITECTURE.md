@@ -274,11 +274,27 @@ Phase 7 implements a lightweight, deterministic in-app notification system stric
 
 ---
 
-## 5. Future AI Integration Boundary (Phase 8 Isolation)
+### 4.6 Dashboards, Operational Analytics & Reporting Engine (`Phase 8 Implemented`)
 
-To enforce **Project Rules #3 and #4**, the AI subsystem in Phase 8 is architected behind a strict **Read-Compute-Recommend** boundary:
+Phase 8 implements multi-tier executive and store operational dashboards, trend analytics, categorical distribution breakdowns, tabular report generation, and streaming CSV export.
 
-1. **Feature Extraction (Read-Only):** Phase 8 services read historical rows from `sales`, `sale_items`, `inventory_batches`, and `shops`.
-2. **Isolated Persistence:** Phase 8 writes model metadata, demand forecasts, and transfer recommendations exclusively to dedicated tables (`ai_model_runs`, `ai_forecasts`, `ai_transfer_recommendations`).
-3. **Human-in-the-Loop Action Boundary:** The AI module has **zero write access** to `inventory_batches`, `stock_movements`, or `transfer_requests`. When a Shop Owner clicks *"Propose Transfer"* on an AI recommendation, the frontend invokes the standard Phase 5 endpoint (`POST /api/v1/transfers`), which enforces the exact same dual-approval and physical handover state machine (`BR-008`, `BR-009`).
-4. **Feature Flag & Fallback:** If `AI_ENABLED=false` (mandatory throughout Phases 1–7) or if a product has fewer than `AI_MIN_HISTORY_DAYS` of sales history, the application seamlessly uses Phase 5's deterministic `SurplusService`.
+#### Architectural Principles:
+1. **Multi-Role Dashboard Scoping:**
+   - **Super Admin Executive Dashboard:** Displays network-wide KPIs (total/active shops, catalog products, aggregate stock units, total inventory valuation, gross sales revenue, COGS, gross margin, completed/pending transfers, near-expiry at-risk valuation, low stock and surplus counts) and a shop-by-shop operational performance breakdown.
+   - **Shop Owner / Staff Operations Hub:** Dynamically scopes data to the active shop via `verify_shop_access`. Displays sellable vs. reserved vs. expired units, retail vs. cost valuation, store sales and gross profit margins, transfer pipeline, actionable replenishment and FEFO near-expiry alerts, and recent transaction feeds.
+2. **Deterministic SQL Aggregation:** All dashboard and report queries compute real-time metrics directly from PostgreSQL transactional tables (`sales`, `sale_items`, `inventory_batches`, `shop_products`, `transfer_requests`, `stock_movements`). No mock data or unverified caches are used.
+3. **Continuous Time-Series Interpolation:** Daily and monthly sales trends utilize zero-filled continuous date sequences between `start_date` and `end_date`, ensuring line charts and data series do not drop days with zero sales transactions.
+4. **Streaming RFC 4180 CSV Export:** The `/api/v1/reports/export` endpoint streams CSV rows as a chunked HTTP generator via Python's standard `csv.writer`, avoiding excessive server memory overhead when exporting large transaction datasets.
+5. **Zero-Dependency SVG Visualizations:** Visual charts (trend lines, horizontal bars, donut charts) are rendered via a lightweight custom client-side SVG engine (`SanchayCharts` in `app/static/js/charts.js`), eliminating external CDN dependencies, chart.js, or complex client frameworks.
+6. **Strict Shop-Level Data Isolation:** API endpoints (`/api/v1/reports/shop/<id>/summary`, `/api/v1/reports/export`, etc.) enforce shop permission boundaries via `verify_shop_access`. Cross-store access by non-admin actors is rejected with `403 UNAUTHORIZED_SHOP_ACCESS`.
+
+---
+
+## 5. Future AI Integration Boundary (Phase 10 Isolation)
+
+To enforce **Project Rules #3 and #4**, the AI subsystem in Phase 10 is architected behind a strict **Read-Compute-Recommend** boundary:
+
+1. **Feature Extraction (Read-Only):** Phase 10 services read historical rows from `sales`, `sale_items`, `inventory_batches`, and `shops`.
+2. **Isolated Persistence:** Phase 10 writes model metadata, demand forecasts, and transfer recommendations exclusively to dedicated tables (`ai_model_runs`, `ai_forecasts`, `ai_transfer_recommendations`).
+3. **Human-in-the-Loop Action Boundary:** The AI module has **zero write access** to `inventory_batches`, `stock_movements`, or `transfer_requests`. When a Shop Owner clicks *"Propose Transfer"* on an AI recommendation, the frontend invokes the standard Phase 6 endpoint (`POST /api/v1/transfers`), which enforces the exact same dual-approval and physical handover state machine (`BR-008`, `BR-009`).
+4. **Feature Flag & Fallback:** If `AI_ENABLED=false` (mandatory throughout Phases 1–8) or if a product has fewer than `AI_MIN_HISTORY_DAYS` of sales history, the application seamlessly uses Phase 5's deterministic `SurplusService`.

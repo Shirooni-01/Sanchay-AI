@@ -11,6 +11,7 @@
         </p>
     </div>
     <div class="header-actions">
+        <a href="{{ url_for('transfers.shop_redistribution_recommendations_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm" style="border-color: rgba(45, 212, 160, 0.4); color: var(--color-primary); font-weight: 600;">&#9878; AI Redistribution Engine</a>
         <a href="{{ url_for('transfers.new_transfer_form', shop_id=shop.id) }}" class="btn btn-primary btn-sm">+ Propose Transfer</a>
         <a href="{{ url_for('analysis.overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Surplus Analysis</a>
         <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Shop Inventory</a>

@@ -741,3 +741,159 @@ def api_batch_analysis(shop_id: int, batch_id: int):
         ),
         200,
     )
+
+
+# =============================================================================
+# Product Analysis (AI Placeholder & Coming Soon Interface)
+# =============================================================================
+
+
+@analysis_bp.route("/product-analysis", methods=["GET"])
+@login_required
+def product_analysis_entry_redirect():
+    """Global navigation entry point for Product Analysis placeholder."""
+    user = verify_authenticated_user()
+    accessible_shops = user.get_accessible_shops(include_inactive=False)
+    if not accessible_shops:
+        accessible_shops = user.get_accessible_shops(include_inactive=True)
+
+    if not accessible_shops:
+        flash("You need an active shop assignment to access Product Analysis.", "error")
+        return redirect(url_for("admin.shops_page"))
+
+    primary = user.get_primary_assignment()
+    target_shop = primary.shop if primary and primary.shop in accessible_shops else accessible_shops[0]
+    return redirect(url_for("analysis.product_analysis_placeholder_page", shop_id=target_shop.id))
+
+
+@analysis_bp.route("/shops/<int:shop_id>/product-analysis", methods=["GET"])
+@require_shop_access(allow_inactive=True)
+def product_analysis_placeholder_page(shop_id: int):
+    """Render the Product Analysis placeholder page with 'Coming soon' state
+
+    and documented AI interface contracts.
+    """
+    from app.models.catalog import ShopProduct
+    from app.services.product_analysis_service import (
+        ProductAnalysisInput,
+        ProductAnalysisService,
+    )
+
+    shop = g.current_shop
+    user = current_user
+    accessible_shops = user.get_accessible_shops(include_inactive=False)
+
+    overview = ProductAnalysisService.get_placeholder_overview()
+
+    # Get available products in this shop for interactive simulation preview
+    shop_products = ShopProduct.query.filter_by(shop_id=shop.id, is_active=True).all()
+    selected_product_id = request.args.get("product_id", type=int)
+
+    analysis_preview = None
+    if selected_product_id and any(sp.product_id == selected_product_id for sp in shop_products):
+        try:
+            analysis_input = ProductAnalysisInput(
+                shop_id=shop.id,
+                product_id=selected_product_id,
+                lookback_days=14,
+                target_horizon_days=14,
+            )
+            analysis_preview = ProductAnalysisService.analyze_product_for_cross_shop_sales(analysis_input)
+        except Exception:
+            analysis_preview = None
+
+    return render_template(
+        "analysis/product_analysis_placeholder.html",
+        shop=shop,
+        accessible_shops=accessible_shops,
+        overview=overview,
+        shop_products=shop_products,
+        selected_product_id=selected_product_id,
+        analysis_preview=analysis_preview,
+    )
+
+
+@analysis_bp.route("/api/v1/shops/<int:shop_id>/product-analysis/preview", methods=["GET"])
+@require_shop_access(allow_inactive=True)
+def api_product_analysis_preview(shop_id: int):
+    """API endpoint providing documented mock return values and simulation preview
+
+    for the upcoming AI Product Analysis Engine.
+    """
+    from app.services.product_analysis_service import (
+        ProductAnalysisInput,
+        ProductAnalysisService,
+    )
+
+    product_id = request.args.get("product_id", type=int)
+    if not product_id:
+        return (
+            jsonify({"success": False, "error": {"code": "VALIDATION_ERROR", "message": "product_id parameter is required."}}),
+            400,
+        )
+
+    try:
+        inp = ProductAnalysisInput(
+            shop_id=shop_id,
+            product_id=product_id,
+            lookback_days=request.args.get("lookback_days", default=14, type=int),
+            target_horizon_days=request.args.get("target_horizon_days", default=14, type=int),
+        )
+        res = ProductAnalysisService.analyze_product_for_cross_shop_sales(inp)
+        return jsonify({"success": True, "data": res.to_dict()}), 200
+    except ValueError as err:
+        return jsonify({"success": False, "error": {"code": "NOT_FOUND", "message": str(err)}}), 404
+    except Exception as err:
+        return jsonify({"success": False, "error": {"code": "INTERNAL_ERROR", "message": str(err)}}), 500
+
+
+@analysis_bp.route("/shops/<int:shop_id>/waste-mitigation", methods=["GET"])
+@require_shop_access(allow_inactive=True)
+def shop_waste_mitigation_page(shop_id: int):
+    """Render the AI Waste Mitigation & Expiry Salvage Dashboard."""
+    from app.services.product_analysis_service import ProductAnalysisService
+
+    shop = g.current_shop
+    user = current_user
+    accessible_shops = user.get_accessible_shops(include_inactive=False)
+
+    lookback_days = request.args.get("lookback_days", default=14, type=int)
+    max_days = request.args.get("max_days", default=45, type=int)
+
+    summary = ProductAnalysisService.analyze_shop_waste_mitigation(
+        shop_id=shop.id,
+        lookback_days=lookback_days,
+        max_days_to_expiry=max_days,
+    )
+
+    return render_template(
+        "analysis/waste_mitigation.html",
+        shop=shop,
+        accessible_shops=accessible_shops,
+        summary=summary,
+        lookback_days=lookback_days,
+        max_days=max_days,
+    )
+
+
+@analysis_bp.route("/api/v1/shops/<int:shop_id>/waste-mitigation", methods=["GET"])
+@require_shop_access(allow_inactive=True)
+def api_shop_waste_mitigation(shop_id: int):
+    """REST API endpoint returning AI waste mitigation, expiry risk, and markdown recommendations."""
+    from app.services.product_analysis_service import ProductAnalysisService
+
+    lookback_days = request.args.get("lookback_days", default=14, type=int)
+    max_days = request.args.get("max_days", default=45, type=int)
+
+    try:
+        summary = ProductAnalysisService.analyze_shop_waste_mitigation(
+            shop_id=shop_id,
+            lookback_days=lookback_days,
+            max_days_to_expiry=max_days,
+        )
+        return jsonify({"status": "success", "data": summary.to_dict()}), 200
+    except ValueError as err:
+        return jsonify({"status": "error", "message": str(err)}), 404
+    except Exception as err:
+        return jsonify({"status": "error", "message": str(err)}), 500
+

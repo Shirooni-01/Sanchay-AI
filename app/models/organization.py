@@ -311,7 +311,7 @@ class UserShopAssignment(db.Model):
     __table_args__ = (
         db.UniqueConstraint("user_id", "shop_id", name="uq_user_shop"),
         db.CheckConstraint(
-            "assignment_role IN ('SHOP_OWNER', 'STAFF')",
+            "assignment_role IN ('SHOP_OWNER')",
             name="ck_user_shop_assignments_role_valid",
         ),
         db.Index(

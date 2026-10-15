@@ -61,7 +61,7 @@ def inventory_entry_redirect():
 @inventory_bp.route("/shops/<int:shop_id>/inventory", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def shop_inventory_overview_page(shop_id: int):
     """Render the comprehensive Shop Inventory Overview page."""
@@ -106,7 +106,7 @@ def shop_inventory_overview_page(shop_id: int):
 @inventory_bp.route("/shops/<int:shop_id>/inventory/receive", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def receive_stock_page(shop_id: int):
     """Render the manual batch stock receipt page."""
@@ -144,7 +144,7 @@ def receive_stock_page(shop_id: int):
 @inventory_bp.route("/shops/<int:shop_id>/inventory/receive", methods=["POST"])
 @require_shop_access(
     allow_inactive=False,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def receive_stock_action(shop_id: int):
     """Handle HTML form submission for receiving a new batch."""
@@ -247,7 +247,7 @@ def adjust_stock_action(shop_id: int):
 @inventory_bp.route("/shops/<int:shop_id>/batches", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def shop_batches_page(shop_id: int):
     """Render the FEFO-ordered Batch Inventory listing page."""
@@ -310,7 +310,7 @@ def shop_batches_page(shop_id: int):
 @inventory_bp.route("/shops/<int:shop_id>/batches/<int:batch_id>", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def batch_detail_page(shop_id: int, batch_id: int):
     """Render the Batch Detail & Ledger History view."""
@@ -378,7 +378,7 @@ def batch_detail_adjust_action(shop_id: int, batch_id: int):
 @inventory_bp.route("/shops/<int:shop_id>/inventory/expiry", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def expiry_alerts_page(shop_id: int):
     """Render the deterministic Near-Expiry and Expired-Stock view."""
@@ -412,7 +412,7 @@ def expiry_alerts_page(shop_id: int):
 @inventory_bp.route("/shops/<int:shop_id>/inventory/low-stock", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def low_stock_alerts_page(shop_id: int):
     """Render the deterministic Low-Stock and Out-of-Stock view."""
@@ -438,7 +438,7 @@ def low_stock_alerts_page(shop_id: int):
 @inventory_bp.route("/shops/<int:shop_id>/stock-movements", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def stock_movements_page(shop_id: int):
     """Render the immutable Stock Movement Ledger history view."""
@@ -494,7 +494,7 @@ def stock_movements_page(shop_id: int):
 @inventory_bp.route("/api/v1/shops/<int:shop_id>/inventory/overview", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_shop_inventory_overview(shop_id: int):
     """Return reconciled shop inventory overview, KPIs, and deterministic alerts."""
@@ -520,7 +520,7 @@ def api_shop_inventory_overview(shop_id: int):
 @inventory_bp.route("/api/v1/shops/<int:shop_id>/batches", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_list_shop_batches(shop_id: int):
     """API-016: List batches in FEFO order with product, status, and expiry filters."""
@@ -568,7 +568,7 @@ def api_list_shop_batches(shop_id: int):
 @inventory_bp.route("/api/v1/shops/<int:shop_id>/batches", methods=["POST"])
 @require_shop_access(
     allow_inactive=False,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_receive_shop_batch(shop_id: int):
     """API-017: Receive a new inventory batch (RECEIPT stock movement)."""
@@ -601,7 +601,7 @@ def api_receive_shop_batch(shop_id: int):
 @inventory_bp.route("/api/v1/shops/<int:shop_id>/batches/<int:batch_id>", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_get_shop_batch(shop_id: int, batch_id: int):
     """Retrieve a single batch and its stock movement ledger."""
@@ -662,7 +662,7 @@ def api_adjust_shop_batch(shop_id: int, batch_id: int):
 @inventory_bp.route("/api/v1/shops/<int:shop_id>/alerts/low-stock", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_low_stock_alerts(shop_id: int):
     """Return deterministic, deduplicated low-stock and out-of-stock alerts for a shop."""
@@ -692,7 +692,7 @@ def api_low_stock_alerts(shop_id: int):
 @inventory_bp.route("/api/v1/shops/<int:shop_id>/alerts/expiry", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_expiry_alerts(shop_id: int):
     """Return deterministic, deduplicated near-expiry and expired batch alerts for a shop."""
@@ -724,7 +724,7 @@ def api_expiry_alerts(shop_id: int):
 @inventory_bp.route("/api/v1/shops/<int:shop_id>/stock-movements", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_list_stock_movements(shop_id: int):
     """API-019: Paginated immutable ledger of stock movements."""

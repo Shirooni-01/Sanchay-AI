@@ -66,9 +66,73 @@
         </dl>
 
         <div class="form-actions" style="margin-top: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <a href="{{ url_for('admin.dashboard_page') }}" class="btn btn-primary btn-sm">Open Role Dashboard</a>
-            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">View Accessible Shops</a>
+            {% if current_user.role == 'SUPER_ADMIN' %}
+                <a href="{{ url_for('admin.dashboard_page') }}" class="btn btn-primary btn-sm">Organization Dashboard</a>
+                <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">Manage Master Shops</a>
+                <a href="{{ url_for('reports.reports_page') }}" class="btn btn-outline btn-sm">Audit Reports</a>
+            {% else %}
+                <a href="{{ url_for('admin.dashboard_page') }}" class="btn btn-primary btn-sm">Shop Dashboard</a>
+                <a href="{{ url_for('sales.pos_entry_redirect') }}" class="btn btn-outline btn-sm">Launch POS Billing</a>
+                <a href="{{ url_for('inventory.inventory_entry_redirect') }}" class="btn btn-outline btn-sm">Batch Inventory</a>
+                <a href="{{ url_for('transfers.transfers_hub_redirect') }}" class="btn btn-outline btn-sm">Stock Transfers</a>
+            {% endif %}
         </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Edit Profile Information</h2>
+            <p class="card-subtitle">
+                Update your display name, contact email, and phone number.
+            </p>
+        </div>
+
+        <form action="{{ url_for('auth.update_profile_action') }}" method="POST" class="stack-form" id="update-profile-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="form-group">
+                <label for="profile_full_name" class="form-label">Full Name</label>
+                <input
+                    type="text"
+                    id="profile_full_name"
+                    name="full_name"
+                    class="form-input"
+                    value="{{ user.full_name }}"
+                    maxlength="120"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="profile_email" class="form-label">Email Address</label>
+                <input
+                    type="email"
+                    id="profile_email"
+                    name="email"
+                    class="form-input"
+                    value="{{ user.email }}"
+                    maxlength="150"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="profile_phone" class="form-label">Phone Number</label>
+                <input
+                    type="text"
+                    id="profile_phone"
+                    name="phone"
+                    class="form-input"
+                    value="{{ user.phone or '' }}"
+                    placeholder="+91-9876543210"
+                    maxlength="30"
+                >
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save Profile</button>
+            </div>
+        </form>
     </div>
 
     <div class="card">

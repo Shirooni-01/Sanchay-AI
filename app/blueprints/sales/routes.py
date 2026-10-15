@@ -113,7 +113,7 @@ def sales_entry_redirect():
 @sales_bp.route("/shops/<int:shop_id>/pos", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def pos_counter_page(shop_id: int):
     """Render the Point-of-Sale (POS) product selector and cart checkout screen."""
@@ -157,7 +157,7 @@ def pos_counter_page(shop_id: int):
 @sales_bp.route("/shops/<int:shop_id>/pos/checkout", methods=["POST"])
 @require_shop_access(
     allow_inactive=False,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def pos_checkout_action(shop_id: int):
     """Process server-side HTML form submission for POS checkout."""
@@ -223,7 +223,7 @@ def pos_checkout_action(shop_id: int):
 @sales_bp.route("/shops/<int:shop_id>/sales", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def sales_history_page(shop_id: int):
     """Render the shop sales history and financial summary screen."""
@@ -267,7 +267,7 @@ def sales_history_page(shop_id: int):
 @sales_bp.route("/shops/<int:shop_id>/sales/<int:sale_id>", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def sale_detail_page(shop_id: int, sale_id: int):
     """Render the sale detail, FEFO batch allocations, and return/cancellation view."""
@@ -289,7 +289,7 @@ def sale_detail_page(shop_id: int, sale_id: int):
 @sales_bp.route("/shops/<int:shop_id>/sales/<int:sale_id>/receipt", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def sale_receipt_page(shop_id: int, sale_id: int):
     """Render the print-friendly customer receipt page."""
@@ -306,10 +306,56 @@ def sale_receipt_page(shop_id: int, sale_id: int):
     )
 
 
+@sales_bp.route("/shops/<int:shop_id>/sales/<int:sale_id>/thermal-slip", methods=["GET"])
+@require_shop_access(
+    allow_inactive=True,
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
+)
+def sale_thermal_slip_page(shop_id: int, sale_id: int):
+    """Render compact 80mm/58mm thermal receipt slip for POS hardware printers."""
+    shop = g.current_shop
+    sale_data = SalesService.get_sale_detail(
+        actor=current_user,
+        shop_id=shop.id,
+        sale_id=sale_id,
+    )
+    width = request.args.get("width", "80").strip()
+    autoprint = request.args.get("autoprint", "0").strip() in ("1", "true", "yes")
+    return render_template(
+        "sales/thermal_slip.html",
+        shop=shop,
+        sale=sale_data,
+        width=width,
+        autoprint=autoprint,
+    )
+
+
+@sales_bp.route("/shops/<int:shop_id>/sales/<int:sale_id>/tax-invoice", methods=["GET"])
+@require_shop_access(
+    allow_inactive=True,
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
+)
+def sale_tax_invoice_page(shop_id: int, sale_id: int):
+    """Render formal A4 Tax Invoice / PDF-printable format."""
+    shop = g.current_shop
+    sale_data = SalesService.get_sale_detail(
+        actor=current_user,
+        shop_id=shop.id,
+        sale_id=sale_id,
+    )
+    autoprint = request.args.get("autoprint", "0").strip() in ("1", "true", "yes")
+    return render_template(
+        "sales/tax_invoice.html",
+        shop=shop,
+        sale=sale_data,
+        autoprint=autoprint,
+    )
+
+
 @sales_bp.route("/shops/<int:shop_id>/sales/<int:sale_id>/cancel", methods=["POST"])
 @require_shop_access(
     allow_inactive=False,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def cancel_sale_action(shop_id: int, sale_id: int):
     """Handle HTML form submission to cancel a same-day completed sale."""
@@ -335,7 +381,7 @@ def cancel_sale_action(shop_id: int, sale_id: int):
 @sales_bp.route("/shops/<int:shop_id>/sales/<int:sale_id>/returns", methods=["POST"])
 @require_shop_access(
     allow_inactive=False,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def process_return_action(shop_id: int, sale_id: int):
     """Handle HTML form submission to return sold items."""
@@ -374,7 +420,7 @@ def process_return_action(shop_id: int, sale_id: int):
 @sales_bp.route("/api/v1/shops/<int:shop_id>/sales", methods=["POST"])
 @require_shop_access(
     allow_inactive=False,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_create_sale(shop_id: int):
     """API-020: Create a POS sale with automatic FEFO batch deduction."""
@@ -408,7 +454,7 @@ def api_create_sale(shop_id: int):
 @sales_bp.route("/api/v1/shops/<int:shop_id>/sales", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_list_sales(shop_id: int):
     """API-021: List shop sales invoices with date range, status, search filters, and summary."""
@@ -445,7 +491,7 @@ def api_list_sales(shop_id: int):
 @sales_bp.route("/api/v1/shops/<int:shop_id>/sales/summary", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_sales_summary(shop_id: int):
     """API-021b: Return shop sales summary metrics for a date range."""
@@ -477,7 +523,7 @@ def api_sales_summary(shop_id: int):
 @sales_bp.route("/api/v1/shops/<int:shop_id>/sales/<int:sale_id>", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_get_sale_detail(shop_id: int, sale_id: int):
     """API-022: Retrieve full invoice details including FEFO batch breakdown and return history."""
@@ -503,7 +549,7 @@ def api_get_sale_detail(shop_id: int, sale_id: int):
 @sales_bp.route("/api/v1/shops/<int:shop_id>/sales/<int:sale_id>/receipt", methods=["GET"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_get_sale_receipt(shop_id: int, sale_id: int):
     """API-022b: Retrieve structured printable receipt data."""
@@ -547,7 +593,7 @@ def api_get_sale_receipt(shop_id: int, sale_id: int):
 @sales_bp.route("/api/v1/shops/<int:shop_id>/sales/<int:sale_id>/cancel", methods=["POST"])
 @require_shop_access(
     allow_inactive=False,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_cancel_sale(shop_id: int, sale_id: int):
     """API-023: Cancel a same-day completed sale and restore stock to original batches."""
@@ -577,7 +623,7 @@ def api_cancel_sale(shop_id: int, sale_id: int):
 @sales_bp.route("/api/v1/shops/<int:shop_id>/sales/<int:sale_id>/returns", methods=["POST"])
 @require_shop_access(
     allow_inactive=False,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_process_return(shop_id: int, sale_id: int):
     """API-024: Process partial or full item return (RESELLABLE, DAMAGED, or EXPIRED)."""
@@ -609,7 +655,7 @@ def api_process_return(shop_id: int, sale_id: int):
 @sales_bp.route("/api/v1/shops/<int:shop_id>/sales/<int:sale_id>", methods=["DELETE"])
 @require_shop_access(
     allow_inactive=True,
-    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
 )
 def api_delete_sale_prohibited(shop_id: int, sale_id: int):
     """Block destructive deletion of historical sales records (Requirement 3)."""
@@ -618,3 +664,46 @@ def api_delete_sale_prohibited(shop_id: int, sale_id: int):
         code="DESTRUCTIVE_DELETE_PROHIBITED",
         details={"sale_id": sale_id, "shop_id": shop_id},
     )
+
+
+@sales_bp.route("/api/v1/shops/<int:shop_id>/sales/offline-reconcile", methods=["POST"])
+@require_shop_access(
+    allow_inactive=False,
+    required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
+)
+def api_offline_reconcile_sales(shop_id: int):
+    """API: Process and reconcile a batch of offline-queued POS bills (PRD Module D)."""
+    payload = request.get_json(silent=True) or {}
+    bills = payload.get("bills")
+    if not isinstance(bills, list) or len(bills) == 0:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Payload must include a non-empty 'bills' array of queued offline sales.",
+                    },
+                }
+            ),
+            400,
+        )
+
+    report = SalesService.reconcile_offline_sales(
+        actor=current_user,
+        shop_id=shop_id,
+        queued_bills=bills,
+        ip_address=_client_ip(),
+        user_agent=_user_agent(),
+    )
+    return (
+        jsonify(
+            {
+                "success": True,
+                "data": report,
+                "meta": {"timestamp": _utc_iso()},
+            }
+        ),
+        200,
+    )
+

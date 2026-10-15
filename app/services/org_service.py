@@ -460,7 +460,7 @@ class ShopService:
                     )
                 if owner_user.organization_id is None:
                     owner_user.organization_id = org.id
-                if owner_user.role == "STAFF":
+                if owner_user.role != "SUPER_ADMIN":
                     owner_user.role = "SHOP_OWNER"
 
                 existing_primary = (
@@ -730,19 +730,6 @@ class MembershipService:
         target_organization_id: int | None = None,
     ) -> list[User]:
         """List users within the authorized organization or shop scope."""
-        if actor.role == "STAFF":
-            _record_security_audit(
-                actor=actor,
-                action="INSUFFICIENT_ROLE_PERMISSION",
-                entity_type="USER",
-                organization_id=actor.organization_id,
-                reason="staff_attempted_user_listing",
-            )
-            raise AuthorizationError(
-                message="Staff members cannot view user administration directories.",
-                code="INSUFFICIENT_ROLE_PERMISSION",
-            )
-
         org = verify_organization_access(
             user=actor,
             target_organization_id=target_organization_id,
@@ -792,20 +779,6 @@ class MembershipService:
     @staticmethod
     def get_user(actor: User, target_user_id: int) -> User:
         """Retrieve a specific user within the actor's authorized scope."""
-        if actor.role == "STAFF" and actor.id != target_user_id:
-            _record_security_audit(
-                actor=actor,
-                action="INSUFFICIENT_ROLE_PERMISSION",
-                entity_type="USER",
-                entity_id=target_user_id,
-                organization_id=actor.organization_id,
-                reason="staff_attempted_other_user_lookup",
-            )
-            raise AuthorizationError(
-                message="Staff members cannot view other user profiles.",
-                code="INSUFFICIENT_ROLE_PERMISSION",
-            )
-
         org = verify_organization_access(user=actor, require_active=False)
         target_user = db.session.get(User, int(target_user_id))
         if target_user is None:
@@ -847,7 +820,7 @@ class MembershipService:
                     reason="shop_owner_attempted_unassigned_user_lookup",
                 )
                 raise AuthorizationError(
-                    message="You can only view staff assigned to your authorized shops.",
+                    message="You can only view users assigned to your authorized shops.",
                     code="UNAUTHORIZED_SHOP_ACCESS",
                 )
 
@@ -861,16 +834,16 @@ class MembershipService:
         user_agent: str | None = None,
     ) -> User:
         """Create a new user within the actor's organization and optionally assign to a shop."""
-        if actor.role == "STAFF":
+        if actor.role != "SUPER_ADMIN":
             _record_security_audit(
                 actor=actor,
                 action="INSUFFICIENT_ROLE_PERMISSION",
                 entity_type="USER",
                 organization_id=actor.organization_id,
-                reason="staff_attempted_user_creation",
+                reason="non_super_admin_attempted_user_creation",
             )
             raise AuthorizationError(
-                message="Staff members are not permitted to create user accounts.",
+                message="Only Super Admins can create user accounts.",
                 code="INSUFFICIENT_ROLE_PERMISSION",
             )
 
@@ -895,7 +868,7 @@ class MembershipService:
             email=payload.get("email"),
             password=payload.get("password"),
             full_name=payload.get("full_name"),
-            role=payload.get("role", "STAFF"),
+            role=payload.get("role", "SHOP_OWNER"),
             phone=payload.get("phone"),
         )
         requested_role = str(cleaned["role"])
@@ -916,26 +889,6 @@ class MembershipService:
                 allow_inactive=False,
                 required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
             )
-
-        # Enforce role hierarchy on creation
-        if actor.role == "SHOP_OWNER":
-            if requested_role != "STAFF":
-                _record_security_audit(
-                    actor=actor,
-                    action="INSUFFICIENT_ROLE_PERMISSION",
-                    entity_type="USER",
-                    organization_id=org.id,
-                    reason=f"shop_owner_attempted_to_create_{requested_role}",
-                )
-                raise AuthorizationError(
-                    message="Shop Owners can only create STAFF accounts.",
-                    code="INSUFFICIENT_ROLE_PERMISSION",
-                )
-            if target_shop is None:
-                raise ValidationError(
-                    message="Shop Owners must specify an authorized shop_id when creating staff.",
-                    details={"shop_id": "Select one of your active shops."},
-                )
 
         try:
             existing = (
@@ -984,14 +937,11 @@ class MembershipService:
                 user_agent=user_agent,
             )
 
-            if target_shop is not None and requested_role in ("SHOP_OWNER", "STAFF"):
-                assignment_role = (
-                    "SHOP_OWNER" if requested_role == "SHOP_OWNER" else "STAFF"
-                )
+            if target_shop is not None and requested_role == "SHOP_OWNER":
                 assignment = UserShopAssignment(
                     user_id=user.id,
                     shop_id=target_shop.id,
-                    assignment_role=assignment_role,
+                    assignment_role="SHOP_OWNER",
                     is_primary=True,
                     is_active=True,
                     assigned_by_user_id=actor.id,
@@ -1044,20 +994,6 @@ class MembershipService:
         user_agent: str | None = None,
     ) -> User:
         """Update user profile, active status, or role within authorized boundaries."""
-        if actor.role == "STAFF":
-            _record_security_audit(
-                actor=actor,
-                action="INSUFFICIENT_ROLE_PERMISSION",
-                entity_type="USER",
-                entity_id=target_user_id,
-                organization_id=actor.organization_id,
-                reason="staff_attempted_user_modification_or_role_elevation",
-            )
-            raise AuthorizationError(
-                message="Staff members cannot modify user accounts or roles.",
-                code="INSUFFICIENT_ROLE_PERMISSION",
-            )
-
         org = verify_organization_access(user=actor, require_active=True)
         target_user = db.session.get(User, int(target_user_id))
         if target_user is None:
@@ -1080,18 +1016,17 @@ class MembershipService:
         cleaned = validate_user_update_input(payload)
 
         if actor.role == "SHOP_OWNER":
-            # Shop Owner cannot modify Super Admin or another Shop Owner
-            if target_user.role != "STAFF" and target_user.id != actor.id:
+            if target_user.id != actor.id:
                 _record_security_audit(
                     actor=actor,
                     action="INSUFFICIENT_ROLE_PERMISSION",
                     entity_type="USER",
                     entity_id=target_user.id,
                     organization_id=org.id,
-                    reason="shop_owner_attempted_to_modify_non_staff_user",
+                    reason="shop_owner_attempted_to_modify_other_user",
                 )
                 raise AuthorizationError(
-                    message="Shop Owners can only manage STAFF accounts assigned to their shops.",
+                    message="Shop Owners can only manage their own account.",
                     code="INSUFFICIENT_ROLE_PERMISSION",
                 )
 
@@ -1108,32 +1043,6 @@ class MembershipService:
                     message="Shop Owners cannot change global user roles.",
                     code="INSUFFICIENT_ROLE_PERMISSION",
                 )
-
-            if target_user.id != actor.id:
-                owned_shop_ids = MembershipService._get_owner_shop_ids(actor)
-                shared = (
-                    db.session.query(UserShopAssignment)
-                    .filter(
-                        UserShopAssignment.user_id == target_user.id,
-                        UserShopAssignment.shop_id.in_(owned_shop_ids),
-                    )
-                    .first()
-                    if owned_shop_ids
-                    else None
-                )
-                if shared is None:
-                    _record_security_audit(
-                        actor=actor,
-                        action="UNAUTHORIZED_SHOP_ACCESS",
-                        entity_type="USER",
-                        entity_id=target_user.id,
-                        organization_id=org.id,
-                        reason="shop_owner_attempted_unassigned_staff_update",
-                    )
-                    raise AuthorizationError(
-                        message="You can only manage staff assigned to your authorized shops.",
-                        code="UNAUTHORIZED_SHOP_ACCESS",
-                    )
 
         # Prevent self-lockout for Super Admin
         if target_user.id == actor.id:
@@ -1261,22 +1170,21 @@ class MembershipService:
 
         assignment_role = cleaned["assignment_role"]
 
-        # Shop Owner can only assign STAFF, never SHOP_OWNER
+        # Only Super Admins can assign users to shops
         if actor.role != "SUPER_ADMIN":
-            if assignment_role != "STAFF" or target_user.role != "STAFF":
-                _record_security_audit(
-                    actor=actor,
-                    action="INSUFFICIENT_ROLE_PERMISSION",
-                    entity_type="USER_SHOP_ASSIGNMENT",
-                    entity_id=target_user.id,
-                    organization_id=shop.organization_id,
-                    shop_id=shop.id,
-                    reason="shop_owner_attempted_owner_role_assignment",
-                )
-                raise AuthorizationError(
-                    message="Shop Owners can only assign STAFF members to their shop.",
-                    code="INSUFFICIENT_ROLE_PERMISSION",
-                )
+            _record_security_audit(
+                actor=actor,
+                action="INSUFFICIENT_ROLE_PERMISSION",
+                entity_type="USER_SHOP_ASSIGNMENT",
+                entity_id=target_user.id,
+                organization_id=shop.organization_id,
+                shop_id=shop.id,
+                reason="non_super_admin_attempted_shop_assignment",
+            )
+            raise AuthorizationError(
+                message="Only Super Admins can assign users to shops.",
+                code="INSUFFICIENT_ROLE_PERMISSION",
+            )
 
         try:
             if target_user.organization_id is None:
@@ -1412,37 +1320,19 @@ class MembershipService:
             )
 
         if actor.role != "SUPER_ADMIN":
-            if assignment.assignment_role == "SHOP_OWNER":
-                _record_security_audit(
-                    actor=actor,
-                    action="INSUFFICIENT_ROLE_PERMISSION",
-                    entity_type="USER_SHOP_ASSIGNMENT",
-                    entity_id=assignment.id,
-                    organization_id=shop.organization_id,
-                    shop_id=shop.id,
-                    reason="shop_owner_attempted_to_modify_owner_assignment",
-                )
-                raise AuthorizationError(
-                    message="Only a Super Admin can modify or revoke a Shop Owner assignment.",
-                    code="INSUFFICIENT_ROLE_PERMISSION",
-                )
-            if (
-                "assignment_role" in payload
-                and str(payload.get("assignment_role") or "").strip().upper() != "STAFF"
-            ):
-                _record_security_audit(
-                    actor=actor,
-                    action="INSUFFICIENT_ROLE_PERMISSION",
-                    entity_type="USER_SHOP_ASSIGNMENT",
-                    entity_id=assignment.id,
-                    organization_id=shop.organization_id,
-                    shop_id=shop.id,
-                    reason="shop_owner_attempted_to_promote_staff_to_owner",
-                )
-                raise AuthorizationError(
-                    message="Shop Owners cannot promote staff to Shop Owner.",
-                    code="INSUFFICIENT_ROLE_PERMISSION",
-                )
+            _record_security_audit(
+                actor=actor,
+                action="INSUFFICIENT_ROLE_PERMISSION",
+                entity_type="USER_SHOP_ASSIGNMENT",
+                entity_id=assignment.id,
+                organization_id=shop.organization_id,
+                shop_id=shop.id,
+                reason="non_super_admin_attempted_to_modify_shop_assignment",
+            )
+            raise AuthorizationError(
+                message="Only a Super Admin can modify or revoke a shop assignment.",
+                code="INSUFFICIENT_ROLE_PERMISSION",
+            )
 
         merged_payload = {
             "user_id": assignment.user_id,
@@ -1479,7 +1369,6 @@ class MembershipService:
                 actor.role == "SUPER_ADMIN"
                 and cleaned["assignment_role"] == "SHOP_OWNER"
                 and assignment.user is not None
-                and assignment.user.role == "STAFF"
             ):
                 assignment.user.role = "SHOP_OWNER"
 

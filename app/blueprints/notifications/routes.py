@@ -78,7 +78,7 @@ def notification_center_page():
                 user=actor,
                 shop_id=shop_id_arg,
                 allow_inactive=True,
-                required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+                required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
             )
         except AuthorizationError:
             active_shop = None
@@ -210,7 +210,7 @@ def api_check_shop_inventory_alerts(shop_id: int):
         user=actor,
         shop_id=shop_id,
         allow_inactive=False,
-        required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+        required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
     )
 
     created_notifs = NotificationService.check_and_notify_inventory_alerts(

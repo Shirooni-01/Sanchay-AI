@@ -6,6 +6,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.0.0] — 2026-10-15 (Production Polish, Design System Overhaul & Decoupled Product Analysis Module)
+
+### Added & Enhanced
+- **Strict Color Tokens & Design System Overhaul:**
+  - Centrally defined CSS custom properties in [`app/static/css/main.css`](file:///d:/Ashutosh_01/Sanchay%20AI/app/static/css/main.css) adhering strictly to product design requirements:
+    - **Dark Theme (Default):** Deep green-black background (`#0F1412`), surface (`#171E1B`), elevated surface (`#1F2824`), border (`#2C3733`), text primary (`#ECF1EE`), text secondary (`#9AA9A2`), primary emerald accent (`#2DD4A0`), hover (`#25B88B`), secondary amber accent (`#F5B544`), danger (`#EF6B5B`), success (`#4ADE80`), and info (`#5EC4D9`).
+    - **Light Theme:** Warm off-white background (`#F6F4EF`), ink text (`#1B2420`), matching emerald and amber accents.
+  - Eliminated all purple/violet gradients and generic white-and-blue SaaS styling across all components.
+  - Immediate `<head>` script in [`app/templates/base.html`](file:///d:/Ashutosh_01/Sanchay%20AI/app/templates/base.html) reads `localStorage.getItem('sanchay_theme')` synchronously to prevent any flash of unstyled theme (FOUC).
+  - Added interactive Theme Toggle button with animated Sun/Moon icons in the main navigation.
+- **Decoupled AI Product Analysis Module:**
+  - Cleanly decoupled architecture with zero external AI/ML dependencies in this release:
+    - [`app/services/product_analysis_service.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/services/product_analysis_service.py) — Core service engine defining typed dataclasses: `ProductAnalysisInput`, `DemandProjection`, `ExpiryRiskAssessment`, `CandidateRecipientShop`, and `ProductAnalysisResult`.
+    - [`services/productAnalysis.py`](file:///d:/Ashutosh_01/Sanchay%20AI/services/productAnalysis.py) — Compatibility facade re-exporting the service and contracts for easy future plug-and-play AI model integration.
+  - Dedicated "Product Analysis" navigation item with an AI pill badge in [`app/templates/base.html`](file:///d:/Ashutosh_01/Sanchay%20AI/app/templates/base.html).
+  - Dedicated placeholder UI at `/product-analysis` and `/shops/<shop_id>/product-analysis` ([`app/templates/analysis/product_analysis_placeholder.html`](file:///d:/Ashutosh_01/Sanchay%20AI/app/templates/analysis/product_analysis_placeholder.html)):
+    - Highlights the future AI redistribution engine's three architectural pillars: Demand Forecasting, Expiry-Risk Trajectory, and Smart Inter-Store Matching.
+    - Live interactive simulation sandbox allowing shop owners to test projections on real store products with zero transactional mutations.
+    - Documented JSON input/output schema contracts for future model developers.
+  - Preview REST API endpoint: `GET /api/v1/shops/<shop_id>/product-analysis/preview`.
+  - Comprehensive test suite in [`tests/test_product_analysis_placeholder.py`](file:///d:/Ashutosh_01/Sanchay%20AI/tests/test_product_analysis_placeholder.py) (3 passed).
+- **UX, Interaction & Error Handling Polish:**
+  - Double-click form submission guard in [`app/static/js/api.js`](file:///d:/Ashutosh_01/Sanchay%20AI/app/static/js/api.js) automatically preventing duplicate submissions across all forms.
+  - Lightweight toast notification system (`window.showToast(message, type, duration)`) for immediate non-intrusive feedback.
+  - Responsive vector charts in [`app/static/js/charts.js`](file:///d:/Ashutosh_01/Sanchay%20AI/app/static/js/charts.js) dynamically adapting to the active theme palette (`getThemeColors()`).
+  - Enhanced form validation, accessible focus states, and contextual empty states across all views.
+- **Automated Regression Suite:**
+  - Full test suite passing 100%: **114 passed, 0 failed** across 9 test files.
+
+---
+
+## [0.9.0] — 2026-10-14 (Phase 8: Dashboards, Real-Time Analytics & CSV Reports)
+
+### Added
+- **Super Admin Organization Dashboard:**
+  - Route `/admin/dashboard` in [`app/blueprints/admin/routes.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/blueprints/admin/routes.py) displaying total shops, active products, total stock quantity, gross sales revenue, and completed transfers.
+  - Organization-wide inventory risk overview: near-expiry batches, low-stock products, and surplus stock.
+  - Single-click CSV export: `GET /admin/dashboard/export`.
+- **Shop Owner Store Dashboard:**
+  - Route `/shops/<shop_id>/dashboard` displaying shop-scoped sales, inventory stock levels, low-stock alerts, and near-expiry warnings.
+  - Inbound and outbound transfer summary cards with direct action links to the transfer workflow.
+  - Recent sales and stock movements table with status badges.
+  - Single-click CSV export: `GET /shops/<shop_id>/dashboard/export`.
+- **Real-Time Analytics & SVG Vector Charts:**
+  - [`app/static/js/charts.js`](file:///d:/Ashutosh_01/Sanchay%20AI/app/static/js/charts.js) — Lightweight, responsive SVG vector charts with zero external charting dependencies:
+    - Daily and monthly sales trend line/bar charts (`GET /api/v1/shops/<id>/analytics/sales-trends`).
+    - Best-selling products horizontal bar chart (`GET /api/v1/shops/<id>/analytics/top-products`).
+    - Stock distribution by category donut chart (`GET /api/v1/shops/<id>/analytics/stock-distribution`).
+    - Inter-store transfer activity breakdown (`GET /api/v1/shops/<id>/analytics/transfers`).
+- **Reports Engine & CSV Streaming Export:**
+  - [`app/services/report_service.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/services/report_service.py) — Transactional reporting engine supporting 4 report types:
+    - Sales Summary Report (gross sales, discounts, refunds, net revenue, payment breakdown).
+    - Inventory Valuation & Stock Status Report (available, reserved, damaged, total units, valuation at purchase and selling price).
+    - Near-Expiry & Waste Risk Report (batch code, expiry date, days to expiry, value at risk).
+    - Inter-Store Transfer Activity Report (transfer codes, source/destination shops, quantities, status, transit damage).
+  - Filtering by date range (7d, 30d, 90d, custom date range), shop, product, and category.
+  - [`app/blueprints/reports/routes.py`](file:///d:/Ashutosh_01/Sanchay%20AI/app/blueprints/reports/routes.py) & [`app/templates/reports/index.html`](file:///d:/Ashutosh_01/Sanchay%20AI/app/templates/reports/index.html).
+  - Streaming CSV export endpoint: `GET /api/v1/reports/export-csv`.
+- **Automated Testing:**
+  - [`tests/test_phase8_reports_dashboards.py`](file:///d:/Ashutosh_01/Sanchay%20AI/tests/test_phase8_reports_dashboards.py) — 14 comprehensive tests (`14 passed`) validating RBAC access, metric accuracy against raw PostgreSQL records, filter boundaries, CSV export contents, and shop data isolation.
+
+---
+
 ## [0.8.0] — 2026-10-13 (Phase 7: Notifications & Alerts — In-App Event Alerts & Lifecycle Tracking)
 
 ### Added

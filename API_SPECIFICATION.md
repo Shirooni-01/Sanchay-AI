@@ -337,12 +337,17 @@ All Phase 5 endpoints accept optional query parameters: `lookback_days` (`1..365
 | **API-037a** | `POST /api/v1/notifications/read-all` | Any Authenticated | Mark all unread notifications for authenticated user as read in bulk. | **Phase 7 Implemented** |
 | **API-037b** | `POST /api/v1/shops/{shop_id}/inventory/check-alerts` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Trigger on-demand shop low-stock and batch expiry alert evaluation with daily deduplication. | **Phase 7 Implemented** |
 
-#### Phase 8 Analytics & Reports (Pending User Approval)
+#### Phase 8 Analytics & Reports (Implemented & Verified)
 | ID | Method & Route | Allowed Roles | Description | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **API-038** | `GET /api/v1/reports/shop/{shop_id}/summary` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Shop financial & inventory KPIs (revenue, COGS, gross profit, valuation, near-expiry, wastage avoided). | Phase 8 Pending |
-| **API-039** | `GET /api/v1/reports/organization/summary` | `SUPER_ADMIN` | Organization-wide executive summary across all shops. | Phase 8 Pending |
-| **API-040** | `GET /api/v1/reports/export` | `SUPER_ADMIN`, `SHOP_OWNER` | Export report (`type=inventory|sales|expiry|transfers`, `format=csv|pdf`). | Phase 8 Pending |
+| **API-038** | `GET /api/v1/reports/shop/{shop_id}/summary` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Shop financial & inventory operational KPIs (revenue, COGS, gross profit, stock valuation, transfer pipeline, alerts). | **Phase 8 Implemented** |
+| **API-039** | `GET /api/v1/reports/organization/summary` | `SUPER_ADMIN` | Organization-wide executive summary across all shops (shops breakdown, aggregate stock, profit margins). | **Phase 8 Implemented** |
+| **API-040** | `GET /api/v1/reports/export` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | RFC 4180 streaming CSV export (`type=SALES|INVENTORY|NEAR_EXPIRY|TRANSFERS`, filtered by date, shop, category). | **Phase 8 Implemented** |
+| **API-040a** | `GET /api/v1/reports/analytics/trends` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Daily/monthly revenue and profit trend series with zero-filled continuous date sequences. | **Phase 8 Implemented** |
+| **API-040b** | `GET /api/v1/reports/analytics/top-products` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Top-selling products ranked by sales revenue and quantity volume. | **Phase 8 Implemented** |
+| **API-040c** | `GET /api/v1/reports/analytics/stock-distribution` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Breakdown of stock value/quantity by category, batch status, and expiry risk horizons. | **Phase 8 Implemented** |
+| **API-040d** | `GET /api/v1/reports/analytics/transfers` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Inter-store transfer throughput, status distribution, and partner exchange metrics. | **Phase 8 Implemented** |
+| **API-040e** | `GET /api/v1/reports/analytics/data` | `SUPER_ADMIN`, Assigned `SHOP_OWNER`, Assigned `STAFF` | Tabular report dataset payload with summary statistics for the web reporting console. | **Phase 8 Implemented** |
 
 ---
 

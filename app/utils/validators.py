@@ -20,8 +20,8 @@ PHONE_REGEX = re.compile(r"^[0-9+\-\s()]{7,20}$")
 SKU_REGEX = re.compile(r"^[A-Z0-9_.-]{2,64}$")
 BATCH_CODE_REGEX = re.compile(r"^[A-Za-z0-9_.-]{2,64}$")
 
-VALID_ROLES = {"SUPER_ADMIN", "SHOP_OWNER", "STAFF"}
-VALID_ASSIGNMENT_ROLES = {"SHOP_OWNER", "STAFF"}
+VALID_ROLES = {"SUPER_ADMIN", "SHOP_OWNER"}
+VALID_ASSIGNMENT_ROLES = {"SHOP_OWNER"}
 VALID_ORG_STATUSES = {"ACTIVE", "INACTIVE"}
 VALID_SHOP_STATUSES = {"ACTIVE", "INACTIVE", "SUSPENDED"}
 VALID_PRODUCT_UNITS = {"pcs", "pack", "kg", "g", "litre", "ml", "box"}
@@ -113,7 +113,7 @@ def validate_user_creation_input(
     email: str | None,
     password: str | None,
     full_name: str | None,
-    role: str = "STAFF",
+    role: str = "SHOP_OWNER",
     phone: str | None = None,
 ) -> dict[str, str | None]:
     """Validate fields required to create a user account."""
@@ -133,7 +133,7 @@ def validate_user_creation_input(
     if not clean_full_name or len(clean_full_name) < 2 or len(clean_full_name) > 120:
         errors["full_name"] = "Full name is required (2-120 characters)."
 
-    clean_role = (role or "STAFF").strip().upper()
+    clean_role = (role or "SHOP_OWNER").strip().upper()
     if clean_role not in VALID_ROLES:
         errors["role"] = f"Role must be one of: {', '.join(sorted(VALID_ROLES))}."
 
@@ -622,7 +622,7 @@ def validate_shop_assignment_input(payload: dict[str, Any]) -> dict[str, Any]:
     if assignment_role not in VALID_ASSIGNMENT_ROLES:
         raise ValidationError(
             message=f"assignment_role must be one of: {', '.join(sorted(VALID_ASSIGNMENT_ROLES))}.",
-            details={"assignment_role": "Must be SHOP_OWNER or STAFF."},
+            details={"assignment_role": "Must be SHOP_OWNER."},
         )
 
     is_primary = (

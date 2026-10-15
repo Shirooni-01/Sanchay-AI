@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Product Analysis (AI Preview) &mdash; Sanchay AI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div style="display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary); border: 1px solid rgba(45, 212, 160, 0.35); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 999px;">
+                AI Engine &bull; Coming Soon
+            </span>
+            <span style="font-size: 0.85rem; color: var(--color-text-muted);">Phase 10 Future Architecture</span>
+        </div>
+        <h1 class="page-title">Product Analysis &amp; Cross-Store Rebalancing</h1>
+        <p class="page-subtitle">
+            Predictive AI engine to identify products with high expiry risk and match them with high-demand sister shops for profitable stock redistribution.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('analysis.overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Deterministic Stock Analysis</a>
+        <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-primary btn-sm">Active Transfers</a>
+    </div>
+</div>
+
+<!-- Architecture & Coming Soon Banner -->
+<section class="card" style="border-left: 4px solid var(--color-primary); margin-bottom: 1.5rem;">
+    <div style="display: flex; gap: 1.25rem; align-items: flex-start;">
+        <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(45, 212, 160, 0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--color-primary);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+            </svg>
+        </div>
+        <div style="flex: 1;">
+            <h3 style="margin: 0 0 0.4rem 0; font-size: 1.15rem; color: var(--color-text);">
+                AI Product Analysis Interface &amp; Decoupled Module
+            </h3>
+            <p style="margin: 0 0 0.85rem 0; font-size: 0.92rem; color: var(--color-text-muted); line-height: 1.6;">
+                The AI Product Analysis engine is designed behind a clean, fully-typed service boundary (<code>app/services/product_analysis_service.py</code> and <code>services/productAnalysis.py</code>). It operates on a strict <strong>Read-Compute-Recommend</strong> architecture: extracting historical demand patterns from PostgreSQL <code>sales</code> and predicting sell-through probabilities before spoilage occurs.
+            </p>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <span class="badge" style="background: var(--color-surface-elevated); border: 1px solid var(--color-border); color: var(--color-text); font-size: 0.8rem; padding: 0.25rem 0.6rem;">
+                    &bull; Zero Autonomous Mutations
+                </span>
+                <span class="badge" style="background: var(--color-surface-elevated); border: 1px solid var(--color-border); color: var(--color-text); font-size: 0.8rem; padding: 0.25rem 0.6rem;">
+                    &bull; Dual Human-in-the-Loop Approvals
+                </span>
+                <span class="badge" style="background: var(--color-surface-elevated); border: 1px solid var(--color-border); color: var(--color-text); font-size: 0.8rem; padding: 0.25rem 0.6rem;">
+                    &bull; Multi-Model Benchmarking (MAE/RMSE)
+                </span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 3 Feature Pillars -->
+<div class="grid-3-col" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+    <div class="card" style="margin: 0;">
+        <div style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; background: rgba(94, 196, 217, 0.15); color: var(--color-info); margin-bottom: 0.75rem;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
+        </div>
+        <h4 style="margin: 0 0 0.35rem 0; font-size: 1rem; color: var(--color-text);">1. Multi-Horizon Demand Velocity</h4>
+        <p style="margin: 0; font-size: 0.88rem; color: var(--color-text-muted); line-height: 1.5;">
+            Trains exponential smoothing and regression models on weekday shopping patterns to forecast 7-day and 14-day demand with 90% confidence intervals.
+        </p>
+    </div>
+
+    <div class="card" style="margin: 0;">
+        <div style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; background: rgba(245, 181, 68, 0.15); color: var(--color-secondary); margin-bottom: 0.75rem;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+        </div>
+        <h4 style="margin: 0 0 0.35rem 0; font-size: 1rem; color: var(--color-text);">2. FEFO Expiry Risk Scoring</h4>
+        <p style="margin: 0; font-size: 0.88rem; color: var(--color-text-muted); line-height: 1.5;">
+            Simulates FIFO/FEFO depletion curves against incoming shelf-life to compute probability of spoilage (0.0 to 1.0) and exact financial capital at risk.
+        </p>
+    </div>
+
+    <div class="card" style="margin: 0;">
+        <div style="display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; background: rgba(45, 212, 160, 0.15); color: var(--color-primary); margin-bottom: 0.75rem;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"></path><path d="M8 21H3v-5"></path><path d="M21 3l-7 7"></path><path d="M3 21l7-7"></path></svg>
+        </div>
+        <h4 style="margin: 0 0 0.35rem 0; font-size: 1rem; color: var(--color-text);">3. Cross-Store Absorption Matching</h4>
+        <p style="margin: 0; font-size: 0.88rem; color: var(--color-text-muted); line-height: 1.5;">
+            Pairs surplus batches with nearby sister shops experiencing high velocity, balancing road distance against gross margin to maximize net salvage profits.
+        </p>
+    </div>
+</div>
+
+<!-- Interactive Simulation Preview & Documented Interface Sandbox -->
+<section class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">Interactive Module Simulation Preview</h2>
+            <p class="card-subtitle">
+                Select a product from <strong>{{ shop.name }}</strong> to test the documented service interface in real time.
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span class="badge" style="background: rgba(45, 212, 160, 0.1); color: var(--color-primary); border: 1px solid rgba(45, 212, 160, 0.25);">
+                {{ overview.version }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Product Picker Form -->
+    <form method="GET" action="{{ url_for('analysis.product_analysis_placeholder_page', shop_id=shop.id) }}" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1.5rem; padding: 1rem; background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+        <div style="flex: 1; min-width: 240px;">
+            <label for="product_id" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--color-text); margin-bottom: 0.4rem;">
+                Select Product to Analyze:
+            </label>
+            <select name="product_id" id="product_id" class="form-control" style="width: 100%;">
+                <option value="">-- Choose a product from {{ shop.name }} --</option>
+                {% for sp in shop_products %}
+                    <option value="{{ sp.product_id }}" {% if selected_product_id == sp.product_id %}selected{% endif %}>
+                        {{ sp.product.name }} ({{ sp.product.sku }}) &bull; Low Stock Threshold: {{ sp.low_stock_threshold }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">
+                Run Analysis Simulation
+            </button>
+        </div>
+    </form>
+
+    {% if analysis_preview %}
+    <!-- Simulation Results Showcase -->
+    <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 1rem;">
+            <div>
+                <h3 style="margin: 0 0 0.25rem 0; font-size: 1.2rem; color: var(--color-text);">
+                    {{ analysis_preview.product_name }} <code style="font-size: 0.85rem; color: var(--color-text-muted);">{{ analysis_preview.sku }}</code>
+                </h3>
+                <span style="font-size: 0.85rem; color: var(--color-text-muted);">Category: {{ analysis_preview.category }} &bull; Source: {{ analysis_preview.source_shop_name }}</span>
+            </div>
+            <div style="text-align: right;">
+                <span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary); font-weight: 600; padding: 0.35rem 0.75rem; border-radius: 999px;">
+                    Model Status: {{ analysis_preview.model_status }}
+                </span>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.25rem;">
+                    {{ analysis_preview.analyzed_at }}
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Grid for Selected Product -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+            <div style="background: var(--color-surface-elevated); padding: 0.85rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
+                <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Local Sales Velocity</span>
+                <strong style="font-size: 1.35rem; color: var(--color-text);">{{ analysis_preview.demand_projection.daily_velocity }} <span style="font-size: 0.85rem; font-weight: normal;">units/day</span></strong>
+                <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.2rem;">7d: ~{{ analysis_preview.demand_projection.projected_7d_demand }} &bull; 14d: ~{{ analysis_preview.demand_projection.projected_14d_demand }} units</span>
+            </div>
+
+            <div style="background: var(--color-surface-elevated); padding: 0.85rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
+                <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Stockout Risk &amp; DOI</span>
+                {% set s_risk = analysis_preview.stockout_prediction.stockout_risk_level %}
+                {% if s_risk == 'CRITICAL' %}
+                    <strong style="font-size: 1.35rem; color: var(--color-danger);">{{ s_risk }}</strong>
+                {% elif s_risk == 'WARNING' %}
+                    <strong style="font-size: 1.35rem; color: var(--color-secondary);">{{ s_risk }}</strong>
+                {% else %}
+                    <strong style="font-size: 1.35rem; color: var(--color-primary);">{{ s_risk }}</strong>
+                {% endif %}
+                <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.2rem;">
+                    DOI: {{ analysis_preview.stockout_prediction.days_of_inventory }} days &bull; Reorder: {{ analysis_preview.stockout_prediction.recommended_reorder_qty }} units
+                </span>
+            </div>
+
+            <div style="background: var(--color-surface-elevated); padding: 0.85rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
+                <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Model Confidence &amp; Fit</span>
+                <strong style="font-size: 1.35rem; color: var(--color-primary);">{{ (analysis_preview.demand_projection.confidence_score * 100) | int }}%</strong>
+                <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.2rem;">
+                    R&sup2;: {{ analysis_preview.demand_projection.r_squared }} &bull; MAE: {{ analysis_preview.demand_projection.mae }} &bull; {{ analysis_preview.demand_projection.data_sufficiency }}
+                </span>
+            </div>
+
+            <div style="background: var(--color-surface-elevated); padding: 0.85rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
+                <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Batches Evaluated</span>
+                <strong style="font-size: 1.35rem; color: var(--color-text);">{{ analysis_preview.expiry_risk_assessments | length }}</strong>
+                <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.2rem;">
+                    {{ analysis_preview.stockout_prediction.total_available_qty }} total units available
+                </span>
+            </div>
+        </div>
+
+        <!-- Plain English Rationale Callout -->
+        <div style="background: rgba(45, 212, 160, 0.08); border-left: 3px solid var(--color-primary); padding: 0.9rem 1.15rem; border-radius: var(--radius-sm); margin-bottom: 1.25rem;">
+            <strong style="display: block; font-size: 0.88rem; color: var(--color-primary); margin-bottom: 0.3rem;">
+                Explainable Rationale (Human-in-the-Loop):
+            </strong>
+            <p style="margin: 0; font-size: 0.92rem; color: var(--color-text); line-height: 1.5;">
+                {{ analysis_preview.plain_english_rationale }}
+            </p>
+        </div>
+
+        <!-- Batch Expiry Risk & Poisson Survival Table -->
+        {% if analysis_preview.expiry_risk_assessments %}
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.98rem; color: var(--color-text);">Active Batches: Expiry Risk &amp; Poisson Spoilage Modeling</h4>
+        <div class="table-responsive" style="margin-bottom: 1.25rem;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Batch Code</th>
+                        <th>Expiry Date</th>
+                        <th>Days Left</th>
+                        <th>Available</th>
+                        <th>Projected Unsold</th>
+                        <th>P(Spoilage)</th>
+                        <th>Risk Score</th>
+                        <th>Recommended Action</th>
+                        <th>Action Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in analysis_preview.expiry_risk_assessments %}
+                    <tr>
+                        <td><code>{{ b.batch_code }}</code></td>
+                        <td>{{ b.expiry_date }}</td>
+                        <td>
+                            {% if b.days_to_expiry <= 5 %}
+                                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--color-danger); font-weight: 700;">{{ b.days_to_expiry }}d</span>
+                            {% elif b.days_to_expiry <= 14 %}
+                                <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary); font-weight: 700;">{{ b.days_to_expiry }}d</span>
+                            {% else %}
+                                <span>{{ b.days_to_expiry }}d</span>
+                            {% endif %}
+                        </td>
+                        <td><strong>{{ b.available_qty }}</strong></td>
+                        <td>
+                            {% if b.projected_unsold_units > 0 %}
+                                <strong style="color: var(--color-danger);">{{ b.projected_unsold_units }} units</strong>
+                            {% else %}
+                                <span style="color: var(--color-primary);">0 (full absorption)</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ (b.poisson_spoilage_probability * 100) | round(1) }}%</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="flex: 1; height: 6px; background: var(--color-surface-elevated); border-radius: 999px; overflow: hidden; min-width: 40px;">
+                                    <div style="height: 100%; width: {{ (b.expiry_risk_score * 100) | int }}%; background: {% if b.expiry_risk_score >= 0.7 %}var(--color-danger){% elif b.expiry_risk_score >= 0.4 %}var(--color-secondary){% else %}var(--color-primary){% endif %};"></div>
+                                </div>
+                                <span style="font-size: 0.8rem; font-weight: 600;">{{ b.expiry_risk_score }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% if b.recommended_action == 'OFFER_TRANSFER' %}
+                                <span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary); font-weight: 700;">OFFER TRANSFER</span>
+                            {% elif b.recommended_action == 'DISCOUNT_LOCALLY' %}
+                                <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary); font-weight: 700;">DISCOUNT LOCALLY</span>
+                            {% else %}
+                                <span class="badge" style="background: var(--color-surface-elevated); color: var(--color-text-muted);">RETAIN</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if b.recommended_action == 'OFFER_TRANSFER' %}
+                                <span style="font-size: 0.82rem; color: var(--color-primary);">High sister-shop demand</span>
+                            {% elif b.recommended_action == 'DISCOUNT_LOCALLY' %}
+                                <span style="font-size: 0.82rem; color: var(--color-secondary);">Mark down {{ b.suggested_discount_percent }}%</span>
+                            {% else %}
+                                <span style="font-size: 0.82rem; color: var(--color-text-muted);">Safe sell-through</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Candidate Sister Shops Table -->
+        {% if analysis_preview.candidate_recipient_shops %}
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.98rem; color: var(--color-text);">Recommended Destination Sister Shops</h4>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Recipient Shop</th>
+                        <th>Distance</th>
+                        <th>Current Stock</th>
+                        <th>Daily Velocity</th>
+                        <th>Absorption Est.</th>
+                        <th>Transport Cost</th>
+                        <th>Net Salvage Benefit</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in analysis_preview.candidate_recipient_shops %}
+                    <tr>
+                        <td>
+                            <strong>{{ c.recipient_shop_name }}</strong><br>
+                            <code style="font-size: 0.75rem;">{{ c.recipient_shop_code }}</code>
+                        </td>
+                        <td>{{ c.distance_km }} km</td>
+                        <td>{{ c.recipient_current_stock }} units</td>
+                        <td><strong>{{ c.recipient_daily_velocity }}</strong> / day</td>
+                        <td><span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary);">~{{ c.estimated_days_to_absorb }} days</span></td>
+                        <td>&#8377;{{ '{:,.2f}'.format(c.estimated_transport_cost) }}</td>
+                        <td><strong style="color: var(--color-primary); font-size: 1rem;">&#8377;{{ '{:,.2f}'.format(c.projected_net_salvage_value) }}</strong></td>
+                        <td>
+                            <a href="{{ url_for('transfers.new_transfer_form', shop_id=shop.id) }}" class="btn btn-primary btn-sm">
+                                Propose Transfer &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+    {% elif selected_product_id %}
+    <p class="empty-state">No active batch inventory or sales velocity data found for the selected product.</p>
+    {% else %}
+    <div class="empty-state" style="padding: 2.5rem; text-align: center;">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--color-text-muted); margin-bottom: 0.75rem;">
+            <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <h4 style="margin: 0 0 0.35rem 0; color: var(--color-text);">Select a Product Above</h4>
+        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+            Choose any product from your store's catalog to inspect how the AI interface models velocity, calculates days-to-absorb, and pairs sister shops.
+        </p>
+    </div>
+    {% endif %}
+</section>
+
+<!-- Interface Schema Documentation -->
+<section class="card">
+    <div class="card-header">
+        <h3 class="card-title">Documented AI Service Schema Contract</h3>
+        <p class="card-subtitle">
+            Developers can drop in scikit-learn, XGBoost, or small language models into <code>app/services/product_analysis_service.py</code> without changing frontend or transactional schemas.
+        </p>
+    </div>
+    <div style="background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 1rem; overflow-x: auto;">
+<pre style="margin: 0; font-family: monospace; font-size: 0.85rem; color: var(--color-primary); line-height: 1.5;">
+# Input Contract: ProductAnalysisInput
+{
+  "shop_id": {{ shop.id }},
+  "product_id": {{ selected_product_id or 1 }},
+  "lookback_days": 14,
+  "target_horizon_days": 14,
+  "include_peer_shops": true
+}
+
+# Output Contract: ProductAnalysisResult
+{
+  "status": "MOCK_SIMULATION",
+  "ai_model_version": "{{ overview.version }}",
+  "demand_projection": {
+    "daily_velocity": float,
+    "projected_7d_demand": float,
+    "confidence_score": float (0.0..1.0),
+    "data_sufficiency": "SUFFICIENT" | "SPARSE" | "INSUFFICIENT_DATA"
+  },
+  "expiry_risk_assessments": [
+    {
+      "batch_id": int,
+      "days_to_expiry": int,
+      "projected_unsold_units": int,
+      "expiry_risk_score": float (0.0..1.0),
+      "recommended_action": "OFFER_TRANSFER" | "RETAIN" | "DISCOUNT_LOCALLY"
+    }
+  ],
+  "candidate_recipient_shops": [
+    {
+      "recipient_shop_id": int,
+      "distance_km": float,
+      "recipient_daily_velocity": float,
+      "estimated_days_to_absorb": float,
+      "projected_net_salvage_value": float
+    }
+  ]
+}
+</pre>
+    </div>
+</section>
+{% endblock %}

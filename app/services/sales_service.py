@@ -163,7 +163,7 @@ class SalesService:
             user=actor,
             shop_id=shop_id,
             allow_inactive=False,
-            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
         )
         cleaned = validate_sale_create_input(
             payload=payload,
@@ -504,7 +504,7 @@ class SalesService:
             user=actor,
             shop_id=shop_id,
             allow_inactive=False,
-            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
         )
         cleaned = validate_sale_cancel_input(payload)
         reason = cleaned["reason"]
@@ -542,11 +542,6 @@ class SalesService:
                 )
 
             sale_date = sale.created_at.date() if sale.created_at else today
-            if sale_date != today and actor.role == "STAFF":
-                raise AuthorizationError(
-                    message="Staff can only cancel sales created on the same business day.",
-                    code="INSUFFICIENT_ROLE_PERMISSION",
-                )
 
             before_state = {
                 "status": sale.status,
@@ -679,7 +674,7 @@ class SalesService:
             user=actor,
             shop_id=shop_id,
             allow_inactive=False,
-            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
         )
         cleaned = validate_sale_return_input(
             payload=payload,
@@ -943,7 +938,7 @@ class SalesService:
             user=actor,
             shop_id=shop_id,
             allow_inactive=True,
-            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
         )
         sale = db.session.get(Sale, int(sale_id))
         if sale is None:
@@ -1066,7 +1061,7 @@ class SalesService:
             user=actor,
             shop_id=shop_id,
             allow_inactive=True,
-            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
         )
         page, per_page = validate_pagination_params(page, per_page)
 
@@ -1142,3 +1137,130 @@ class SalesService:
                 "total_pages": total_pages,
             },
         }
+
+    @staticmethod
+    def reconcile_offline_sales(
+        actor: User,
+        shop_id: int,
+        queued_bills: list[dict[str, Any]],
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> dict[str, Any]:
+        """Process and reconcile a batch of offline-queued POS bills (PRD Module D).
+
+        Sequentially processes queued sales with idempotent deduplication and atomic FEFO deduction.
+        If a bill encounters InsufficientStockError or ValidationError, the conflict is recorded
+        without crashing the entire sync batch.
+        """
+        shop, _ = verify_shop_access(
+            user=actor,
+            shop_id=shop_id,
+            allow_inactive=False,
+            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
+        )
+
+        reconciliation_id = f"RECON-{shop.code}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        results: list[dict[str, Any]] = []
+        synced_count = 0
+        already_synced_count = 0
+        conflict_count = 0
+        failed_count = 0
+
+        for idx, bill in enumerate(queued_bills):
+            client_ref = bill.get("client_bill_id") or bill.get("offline_id") or f"BILL-{idx+1}"
+            idem_key = bill.get("idempotency_key") or bill.get("client_idempotency_key")
+
+            # Check if already processed
+            if idem_key:
+                existing = Sale.query.filter_by(shop_id=shop.id, idempotency_key=idem_key).first()
+                if existing:
+                    already_synced_count += 1
+                    results.append(
+                        {
+                            "client_bill_id": client_ref,
+                            "idempotency_key": idem_key,
+                            "status": "ALREADY_SYNCED",
+                            "sale_id": existing.id,
+                            "invoice_number": existing.invoice_number,
+                            "total_amount": float(existing.total_amount),
+                            "message": f"Sale was previously synced with invoice {existing.invoice_number}.",
+                        }
+                    )
+                    continue
+
+            # Attempt to create sale
+            try:
+                sale = SalesService.create_sale(
+                    actor=actor,
+                    shop_id=shop.id,
+                    payload=bill,
+                    header_idempotency_key=idem_key,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                )
+                synced_count += 1
+                results.append(
+                    {
+                        "client_bill_id": client_ref,
+                        "idempotency_key": sale.idempotency_key,
+                        "status": "SYNCED",
+                        "sale_id": sale.id,
+                        "invoice_number": sale.invoice_number,
+                        "total_amount": float(sale.total_amount),
+                        "created_at": sale.created_at.isoformat() if sale.created_at else None,
+                        "message": f"Successfully synced and issued invoice {sale.invoice_number}.",
+                    }
+                )
+            except InsufficientStockError as err:
+                conflict_count += 1
+                db.session.rollback()
+                results.append(
+                    {
+                        "client_bill_id": client_ref,
+                        "idempotency_key": idem_key,
+                        "status": "CONFLICT_INSUFFICIENT_STOCK",
+                        "error_code": getattr(err, "code", "INSUFFICIENT_STOCK"),
+                        "message": str(err.message if hasattr(err, "message") else err),
+                        "details": getattr(err, "details", None),
+                    }
+                )
+            except (ValidationError, DomainError) as err:
+                failed_count += 1
+                db.session.rollback()
+                results.append(
+                    {
+                        "client_bill_id": client_ref,
+                        "idempotency_key": idem_key,
+                        "status": "FAILED_VALIDATION",
+                        "error_code": getattr(err, "code", "VALIDATION_ERROR"),
+                        "message": str(err.message if hasattr(err, "message") else err),
+                        "details": getattr(err, "details", None),
+                    }
+                )
+            except Exception as err:
+                failed_count += 1
+                db.session.rollback()
+                results.append(
+                    {
+                        "client_bill_id": client_ref,
+                        "idempotency_key": idem_key,
+                        "status": "FAILED_INTERNAL_ERROR",
+                        "error_code": "INTERNAL_ERROR",
+                        "message": str(err),
+                    }
+                )
+
+        return {
+            "reconciliation_id": reconciliation_id,
+            "shop_id": shop.id,
+            "shop_name": shop.name,
+            "shop_code": shop.code,
+            "total_bills": len(queued_bills),
+            "synced_count": synced_count,
+            "already_synced_count": already_synced_count,
+            "conflict_count": conflict_count,
+            "failed_count": failed_count,
+            "reconciled_at": datetime.now(timezone.utc).isoformat(),
+            "results": results,
+        }
+

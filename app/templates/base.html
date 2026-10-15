@@ -4,59 +4,125 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% block title %}Sanchay AI{% endblock %}</title>
+    <title>{% block title %}Smart Vendor{% endblock %}</title>
+    <script>
+        (function() {
+            var savedTheme = localStorage.getItem('sanchay_theme') || 'dark';
+            if (savedTheme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 <body>
     <header class="top-navbar">
         <div class="container navbar-inner">
             <div class="brand-cluster">
-                <a href="{{ url_for('admin.dashboard_page') if current_user.is_authenticated else url_for('auth.login_page') }}" class="brand-logo">
+                <a href="{{ url_for('admin.dashboard_page') if current_user.is_authenticated else url_for('auth.login_page') }}" class="brand-logo" title="Smart Vendor Home">
                     <span class="brand-mark">S</span>
-                    <span class="brand-text">Sanchay AI</span>
-                    <span class="phase-pill">Phase 6 &bull; Inter-Store Stock Exchange</span>
+                    <span class="brand-text">Smart Vendor</span>
+                    {% if current_user.is_authenticated %}
+                        {% if current_user.role == 'SUPER_ADMIN' %}
+                            <span class="phase-pill" style="border-color: var(--color-accent-amber); color: var(--color-accent-amber);">Organization Portal</span>
+                        {% else %}
+                            <span class="phase-pill" style="border-color: var(--color-accent-primary); color: var(--color-accent-primary);">Shop Portal</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="phase-pill">Multi-Store Platform</span>
+                    {% endif %}
                 </a>
 
                 {% if current_user.is_authenticated %}
                 <nav class="primary-nav" aria-label="Main navigation">
+                    {% if current_user.role == 'SUPER_ADMIN' %}
+                    <!-- ================= ORGANIZATION FEATURES ONLY ================= -->
+                    <a href="{{ url_for('admin.dashboard_page') }}" class="nav-link {% if request.path.startswith('/dashboard') %}active{% endif %}">Dashboard</a>
+                    <a href="{{ url_for('admin.shops_page') }}" class="nav-link {% if request.path == '/shops' or ('/shops/' in request.path and not '/pos' in request.path and not '/transfers' in request.path and not '/inventory' in request.path and not '/analysis' in request.path and not '/sales' in request.path) %}active{% endif %}">Shops</a>
+                    <a href="{{ url_for('catalog.catalog_Entry_redirect') }}" class="nav-link {% if '/products' in request.path or request.path.startswith('/catalog') %}active{% endif %}">Catalog</a>
+                    <a href="{{ url_for('reports.reports_page') }}" class="nav-link {% if request.path.startswith('/reports') or request.path.startswith('/analytics') %}active{% endif %}">Reports</a>
+                    <a href="{{ url_for('admin.organization_page') }}" class="nav-link {% if request.path.startswith('/organization') %}active{% endif %}">Organization</a>
+                    <a href="{{ url_for('admin.users_page') }}" class="nav-link {% if request.path.startswith('/users') %}active{% endif %}">Personnel &amp; Roles</a>
+                    {% else %}
+                    <!-- ================= SHOP FEATURES ONLY ================= -->
                     <a href="{{ url_for('admin.dashboard_page') }}" class="nav-link {% if request.path.startswith('/dashboard') %}active{% endif %}">Dashboard</a>
                     <a href="{{ url_for('sales.pos_entry_redirect') }}" class="nav-link {% if '/pos' in request.path %}active{% endif %}">POS Billing</a>
                     <a href="{{ url_for('sales.sales_entry_redirect') }}" class="nav-link {% if '/sales' in request.path %}active{% endif %}">Sales</a>
-                    <a href="{{ url_for('catalog.catalog_Entry_redirect') }}" class="nav-link {% if '/products' in request.path or request.path.startswith('/catalog') %}active{% endif %}">Catalog</a>
                     <a href="{{ url_for('inventory.inventory_entry_redirect') }}" class="nav-link {% if '/inventory' in request.path or '/stock-movements' in request.path %}active{% endif %}">Inventory</a>
-                    <a href="{{ url_for('analysis.analysis_entry_redirect') }}" class="nav-link {% if '/analysis' in request.path %}active{% endif %}">Stock Analysis</a>
-                    <a href="{{ url_for('transfers.transfers_hub_redirect') }}" class="nav-link {% if '/transfers' in request.path %}active{% endif %}">Transfers</a>
-                    <a href="{{ url_for('notifications.notification_center_page') }}" class="nav-link {% if request.path.startswith('/notifications') %}active{% endif %}">
-                        Alerts <span id="nav-alerts-badge" class="alerts-pill" style="display: none;">0</span>
+                    <a href="{{ url_for('analysis.analysis_entry_redirect') }}" class="nav-link {% if '/analysis' in request.path and not 'product-analysis' in request.path %}active{% endif %}">Stock Analysis</a>
+                    <a href="{{ url_for('analysis.product_analysis_entry_redirect') }}" class="nav-link {% if 'product-analysis' in request.path %}active{% endif %}">
+                        Product Analysis <span class="badge-ai-nav">AI</span>
                     </a>
-                    <a href="{{ url_for('admin.shops_page') }}" class="nav-link {% if request.path == '/shops' %}active{% endif %}">Shops</a>
-                    <a href="{{ url_for('admin.organization_page') }}" class="nav-link {% if request.path.startswith('/organization') %}active{% endif %}">Organization</a>
-                    {% if current_user.role in ('SUPER_ADMIN', 'SHOP_OWNER') %}
-                    <a href="{{ url_for('admin.users_page') }}" class="nav-link {% if request.path.startswith('/users') %}active{% endif %}">Users &amp; Roles</a>
+                    <a href="{{ url_for('transfers.transfers_hub_redirect') }}" class="nav-link {% if '/transfers' in request.path %}active{% endif %}">Transfers</a>
+                    <a href="{{ url_for('reports.reports_page') }}" class="nav-link {% if request.path.startswith('/reports') or request.path.startswith('/analytics') %}active{% endif %}">Reports</a>
                     {% endif %}
-                    <a href="{{ url_for('auth.landing_page') }}" class="nav-link {% if request.path == '/' %}active{% endif %}">Account</a>
                 </nav>
                 {% endif %}
             </div>
 
             {% if current_user.is_authenticated %}
             <nav class="navbar-actions" aria-label="User navigation">
+                <!-- Theme Toggle Button -->
+                <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Theme" aria-label="Toggle Light/Dark Theme">
+                    <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+
+                <!-- Notifications Bell -->
                 <a href="{{ url_for('notifications.notification_center_page') }}" class="nav-notification-btn" title="Notification Center" aria-label="Notification Center">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="bell-icon">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="bell-icon">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                         <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                     </svg>
                     <span id="nav-unread-badge" class="notification-badge" style="display: none;">0</span>
                 </a>
-                <div class="user-chip">
+
+                <!-- User Profile Chip -->
+                <a href="{{ url_for('auth.landing_page') }}" class="user-chip" title="{{ current_user.full_name }} ({{ current_user.role }}) &bull; Click for Account &amp; Sessions">
+                    <span class="user-avatar-initial">{{ (current_user.full_name or current_user.username)[:1].upper() }}</span>
                     <span class="user-name">{{ current_user.full_name }}</span>
                     <span class="role-badge role-{{ current_user.role | lower }}">{{ current_user.role }}</span>
-                </div>
+                </a>
+
+                <!-- Sign Out -->
                 <form action="{{ url_for('auth.logout_action') }}" method="POST" class="inline-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline btn-sm" id="logout-btn">Sign Out</button>
                 </form>
             </nav>
+            {% else %}
+            <div class="navbar-actions">
+                <button type="button" id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Theme" aria-label="Toggle Light/Dark Theme">
+                    <svg class="sun-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg class="moon-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+            </div>
             {% endif %}
         </div>
     </header>
@@ -79,8 +145,8 @@
 
     <footer class="site-footer">
         <div class="container footer-inner">
-            <span>Sanchay AI &mdash; Multi-Store Inventory &amp; Stock Redistribution Platform</span>
-            <span class="footer-meta">Phase 7: In-App Notifications, Event Alerts &amp; Lifecycle Tracking</span>
+            <span>Smart Vendor &mdash; Multi-Store Inventory &amp; Stock Redistribution Platform (Powered by Sanchay AI)</span>
+            <span class="footer-meta">Production-Ready &bull; PostgreSQL ACID Engine</span>
         </div>
     </footer>
 
@@ -88,7 +154,7 @@
     {% if current_user.is_authenticated %}
     <script>
     function updateNavUnreadCount() {
-        if (!window.sanchayAPI) return;
+        if (!window.sanchayAPI || !window.sanchayAPI.fetchJSON) return;
         window.sanchayAPI.fetchJSON("/api/v1/notifications/unread-count")
             .then(function(resp) {
                 if (resp && resp.success && resp.data) {

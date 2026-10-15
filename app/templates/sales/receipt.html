@@ -8,7 +8,9 @@
         <p class="page-subtitle">Receipt Number: <code>{{ sale.invoice_number }}</code></p>
     </div>
     <div class="header-actions">
-        <button type="button" id="print-receipt-btn" class="btn btn-primary btn-sm">Print Receipt</button>
+        <button type="button" id="print-receipt-btn" class="btn btn-primary btn-sm">&#128438; Print Standard Receipt</button>
+        <a href="{{ url_for('sales.sale_thermal_slip_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-outline btn-sm" target="_blank">&#129534; Thermal Slip (80mm)</a>
+        <a href="{{ url_for('sales.sale_tax_invoice_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-outline btn-sm" target="_blank">&#128196; Tax Invoice (A4)</a>
         <a href="{{ url_for('sales.sale_detail_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-outline btn-sm">Invoice Details &amp; Returns</a>
         <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-secondary btn-sm">+ New POS Sale</a>
     </div>

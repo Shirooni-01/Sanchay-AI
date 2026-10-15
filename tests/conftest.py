@@ -97,14 +97,14 @@ def active_user(app: Flask):
 
 @pytest.fixture()
 def inactive_user(app: Flask):
-    """Create and return a deactivated STAFF user in the test database."""
+    """Create and return a deactivated SHOP_OWNER user in the test database."""
     with app.app_context():
         user = AuthService.create_user(
-            username="inactive_staff",
+            username="inactive_owner",
             email="inactive@sanchay.local",
             password="ValidPassword123",
             full_name="Former Employee",
-            role="STAFF",
+            role="SHOP_OWNER",
             is_active=False,
         )
         return {

@@ -139,7 +139,7 @@ def _setup_phase3_topology(app: Flask) -> dict:
             email="staff_a@sanchay.local",
             password="ValidPassword123",
             full_name="Staff Kothrud",
-            role="STAFF",
+            role="SHOP_OWNER",
             organization_id=org1.id,
         )
         MembershipService.assign_user_to_shop(
@@ -147,7 +147,7 @@ def _setup_phase3_topology(app: Flask) -> dict:
             shop_id=shop_a.id,
             payload={
                 "user_id": staff_a.id,
-                "assignment_role": "STAFF",
+                "assignment_role": "SHOP_OWNER",
                 "is_primary": True,
                 "is_active": True,
             },
@@ -615,18 +615,18 @@ class TestBatchInventoryAndLedgerReconciliation:
         )
         batch_id = batch_res.get_json()["data"]["batch"]["id"]
 
-        # 1. STAFF cannot perform manual stock adjustments -> 403 INSUFFICIENT_ROLE_PERMISSION
-        _login(client, "p3_staff_a")
-        staff_adj = client.post(
+        # 1. Non-assigned Owner (Shop B) cannot perform manual stock adjustments on Shop A -> 403 UNAUTHORIZED_SHOP_ACCESS
+        _login(client, "p3_owner_b")
+        unauth_adj = client.post(
             f"/api/v1/shops/{shop_a_id}/batches/{batch_id}/adjust",
             json={
                 "movement_type": "ADJUSTMENT_SUBTRACT",
                 "quantity": 2,
-                "reason": "Staff attempt",
+                "reason": "Cross-shop attempt",
             },
         )
-        assert staff_adj.status_code == 403
-        assert staff_adj.get_json()["error"]["code"] == "INSUFFICIENT_ROLE_PERMISSION"
+        assert unauth_adj.status_code == 403
+        assert unauth_adj.get_json()["error"]["code"] == "UNAUTHORIZED_SHOP_ACCESS"
 
         # 2. SHOP_OWNER performs ADJUSTMENT_ADD (+5 -> 25 available)
         _login(client, "p3_owner_a")
@@ -883,12 +883,12 @@ class TestPhase3SecurityAndIsolation:
         assert cross_org.status_code == 403
         assert cross_org.get_json()["error"]["code"] == "UNAUTHORIZED_ORG_ACCESS"
 
-        # 5. Staff A cannot create or update products in Shop A -> 403 INSUFFICIENT_ROLE_PERMISSION
-        _login(client, "p3_staff_a")
-        staff_create = client.post(
+        # 5. Owner of Shop B cannot create or update products in Shop A -> 403 UNAUTHORIZED_SHOP_ACCESS
+        _login(client, "p3_owner_b")
+        cross_create = client.post(
             f"/api/v1/shops/{shop_a_id}/products",
             json={
-                "sku": "STAFF-PROD-01",
+                "sku": "CROSS-PROD-01",
                 "name": "Unauthorized Product",
                 "category": "Snacks",
                 "unit": "pack",
@@ -897,8 +897,8 @@ class TestPhase3SecurityAndIsolation:
                 "reorder_level": 5,
             },
         )
-        assert staff_create.status_code == 403
-        assert staff_create.get_json()["error"]["code"] == "INSUFFICIENT_ROLE_PERMISSION"
+        assert cross_create.status_code == 403
+        assert cross_create.get_json()["error"]["code"] == "UNAUTHORIZED_SHOP_ACCESS"
 
         # 6. Deactivate product -> receiving new batches for deactivated product is rejected (409)
         _login(client, "p3_owner_a")

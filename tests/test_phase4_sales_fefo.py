@@ -141,7 +141,7 @@ def _setup_phase4_topology(app: Flask) -> dict:
             email="p4_staff_a@sanchay.local",
             password="ValidPassword123",
             full_name="Cashier Kothrud",
-            role="STAFF",
+            role="SHOP_OWNER",
             organization_id=org1.id,
         )
         MembershipService.assign_user_to_shop(
@@ -149,7 +149,7 @@ def _setup_phase4_topology(app: Flask) -> dict:
             shop_id=shop_a.id,
             payload={
                 "user_id": staff_a.id,
-                "assignment_role": "STAFF",
+                "assignment_role": "SHOP_OWNER",
                 "is_primary": True,
                 "is_active": True,
             },

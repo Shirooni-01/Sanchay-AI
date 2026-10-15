@@ -48,8 +48,8 @@ class User(UserMixin, db.Model):
     role = db.Column(
         db.String(20),
         nullable=False,
-        default="STAFF",
-        server_default="STAFF",
+        default="SHOP_OWNER",
+        server_default="SHOP_OWNER",
     )
     is_active = db.Column(
         db.Boolean,
@@ -88,7 +88,7 @@ class User(UserMixin, db.Model):
 
     __table_args__ = (
         db.CheckConstraint(
-            "role IN ('SUPER_ADMIN', 'SHOP_OWNER', 'STAFF')",
+            "role IN ('SUPER_ADMIN', 'SHOP_OWNER')",
             name="chk_users_role",
         ),
         db.Index("idx_users_role_active", "role", "is_active"),

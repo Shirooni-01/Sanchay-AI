@@ -130,3 +130,42 @@ Stay informed on critical store events, low-stock conditions, expiring batches, 
 - **On-Demand Alert Evaluation:** Click **Evaluate Shop Alerts** to trigger an immediate scan of your active store's catalog and batch inventory. Newly detected low stock or near-expiry batches are flagged immediately with daily deduplication.
 - **Direct Entity Actions:** Click **View Transfer &rarr;**, **View Product &rarr;**, or **View Batch Ledger &rarr;** on any notification card to jump directly to the relevant record.
 
+---
+
+## 7. Dashboards, Reports & Operational Analytics (Phase 8 — Implemented & Verified)
+
+Real-time PostgreSQL operational intelligence, KPI tracking, charts, and downloadable reports without third-party analytics services or hardcoded mock data.
+
+### 7.1 Executive Super Admin Dashboard (`/dashboard`)
+When logged in as `SUPER_ADMIN`:
+- **Organization Network KPIs:** Active vs. total shops, total catalog products, organization inventory unit count, total valuation, gross sales revenue, total orders, COGS, gross margin percentage, completed transfers, in-progress transfers, near-expiry batch counts, and at-risk stock valuation.
+- **14-Day Sales Velocity Chart:** Visual SVG trend line displaying daily completed order revenue.
+- **Network Health Overview:** Low-stock items vs. transferable surplus products.
+- **Shop Operational Performance Matrix:** Tabular comparison of every shop in the organization, showing active product count, available stock volume, inventory cost valuation, completed sales revenue, profit margin, low-stock deficit alerts, and completed transfers, with one-click links to POS, store reports, risk analysis, and transfers.
+
+### 7.2 Shop Owner & Staff Operations Hub (`/dashboard`)
+When logged in as `SHOP_OWNER` or `STAFF`:
+- **Shop Switcher:** Seamlessly switch between assigned stores if managing multiple locations.
+- **Store Operational KPIs:** Available sellable units, reserved units, cost and retail valuation, completed sales revenue, order count, average order value (AOV), gross profit and margin %, transfer pipeline (incoming vs. outgoing pending), and expired/damaged units needing scraping.
+- **14-Day Store Velocity Chart:** Store-specific revenue trajectory.
+- **Quick Actions Grid:** One-click shortcuts to Launch POS Billing, Manage Inventory, Stock Risk Analysis, Transfer Exchange, and Store Reports.
+- **Low Stock Replenishment Alerts:** Live table of products below configured reorder levels with stock deficit.
+- **Near-Expiry FEFO Batches:** Live table of batches within near-expiry window, displaying days remaining, available quantity, and at-risk valuation.
+- **Activity Feeds:** Real-time feeds for recent completed counter sales and the immutable stock movement ledger journal.
+
+### 7.3 Reports & Analytics Hub (`/reports`)
+- **Centralized Reporting Console:** Filter reports by Report Type (`Sales Performance`, `Stock Inventory`, `Near-Expiry Risk`, `Transfer Activity`), Shop Location, Product Category, and Date Range (`start_date` to `end_date`).
+- **Summary Statistics Banner:** Instant aggregate metrics for the selected filter set (e.g., total sales, revenue, profit, average order value).
+- **Interactive Tabular Report:** Sortable, structured table with empty state handling and category/SKU badges.
+- **Operational Visualizations:**
+  - *Daily/Monthly Sales Trend:* Dynamic SVG line chart with continuous zero-filling for days without transactions.
+  - *Top-Selling Products:* Horizontal SVG bar chart ranking highest-selling products by quantity volume and revenue.
+  - *Stock Distribution by Category & Risk:* Multi-segment SVG donut chart displaying inventory distribution across product categories.
+  - *Inter-Store Transfer Pipeline:* Bar chart displaying transfer volumes by status (Completed, In Transit, Pending, Rejected, Cancelled).
+
+### 7.4 Streaming RFC 4180 CSV Export
+- Click **Export to CSV** on any filtered report view to download an RFC 4180-compliant CSV spreadsheet.
+- Delivered as a memory-efficient streaming download (`/api/v1/reports/export`) directly from PostgreSQL transactional records.
+- Fully compatible with Excel, Google Sheets, LibreOffice, and data pipeline tools.
+
+

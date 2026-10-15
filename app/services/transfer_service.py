@@ -82,7 +82,7 @@ class TransferService:
             user=actor,
             shop_id=source_shop_id,
             allow_inactive=False,
-            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER", "STAFF"},
+            required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
         )
 
         peer_shops = (
@@ -1119,13 +1119,13 @@ class TransferService:
                     code="TRANSFER_NOT_APPROVED_RESERVED",
                 )
 
-            # Authorization: Source SHOP_OWNER, Source STAFF, or SUPER_ADMIN
+            # Authorization: Source SHOP_OWNER or SUPER_ADMIN
             if not is_admin:
                 verify_shop_access(
                     user=actor,
                     shop_id=transfer.source_shop_id,
                     allow_inactive=False,
-                    required_shop_roles={"SHOP_OWNER", "STAFF"},
+                    required_shop_roles={"SHOP_OWNER"},
                 )
 
             now = _utc_now()
@@ -1169,7 +1169,7 @@ class TransferService:
                 notification_type="TRANSFER_DISPATCHED",
                 title=f"Transfer Dispatched: {transfer.transfer_code}",
                 message=f"Shop '{src_name}' has dispatched {transfer.quantity} units of '{prod_name}'. Notes: {combined_notes or 'In transit'}",
-                roles={"SHOP_OWNER", "STAFF"},
+                roles={"SHOP_OWNER"},
                 related_entity_type="transfer",
                 related_entity_id=transfer.id,
                 dedup_key_prefix=f"transfer:{transfer.id}:DISPATCHED_IN_TRANSIT",
@@ -1485,3 +1485,205 @@ class TransferService:
         except Exception:
             db.session.rollback()
             raise
+
+    @classmethod
+    def get_redistribution_recommendations(
+        cls,
+        actor: User,
+        shop_id: int | None = None,
+        max_distance_km: float = 100.0,
+        min_net_salvage: float = 0.0,
+    ) -> list[dict[str, Any]]:
+        """Multi-shop automated stock redistribution recommendation engine (PRD Module F).
+
+        Pairs surplus batches with deficit or high-velocity sister shops within the organization.
+        Balances Haversine transit costs against gross profit to maximize net salvage.
+        Zero autonomous mutations: returns recommendations for human Shop Owner review and proposal.
+        """
+        from app.utils.geo import haversine_distance_km
+
+        today = get_business_today()
+        recommendations: list[dict[str, Any]] = []
+
+        # Determine target shops based on actor role and shop_id filter
+        if shop_id is not None:
+            scoped_shop, _ = verify_shop_access(
+                user=actor,
+                shop_id=shop_id,
+                allow_inactive=False,
+                required_shop_roles={"SUPER_ADMIN", "SHOP_OWNER"},
+            )
+            org_id = scoped_shop.organization_id
+            source_shops = [scoped_shop]
+        else:
+            if actor.role != "SUPER_ADMIN":
+                accessible = actor.get_accessible_shops(include_inactive=False)
+                if not accessible:
+                    return []
+                org_id = accessible[0].organization_id
+                source_shops = accessible
+            else:
+                org_id = actor.organization_id
+                source_shops = Shop.query.filter_by(organization_id=org_id, status="ACTIVE").all()
+
+        if not org_id or not source_shops:
+            return []
+
+        # All active shops in the organization
+        all_org_shops = {
+            s.id: s
+            for s in Shop.query.filter_by(organization_id=org_id, status="ACTIVE").all()
+        }
+
+        for src_shop in source_shops:
+            # Query active batches in source shop with available stock
+            surplus_batches = (
+                InventoryBatch.query.filter_by(shop_id=src_shop.id, status="ACTIVE")
+                .filter(InventoryBatch.available_qty > 0)
+                .order_by(InventoryBatch.expiry_date.asc())
+                .all()
+            )
+
+            for batch in surplus_batches:
+                if batch.is_expired_on(today):
+                    continue
+                days_left = batch.days_to_expiry_on(today)
+                product = db.session.get(Product, batch.product_id)
+                if not product or not product.is_active:
+                    continue
+
+                src_sp = ShopProduct.query.filter_by(shop_id=src_shop.id, product_id=product.id).first()
+                selling_price = float(
+                    src_sp.selling_price
+                    if (src_sp and src_sp.selling_price)
+                    else (product.default_selling_price or 0.0)
+                )
+                unit_cost = float(batch.unit_cost or product.default_purchase_price or 0.0)
+                unit_margin = max(0.0, selling_price - unit_cost)
+
+                # Find candidate recipient sister shops in the same organization
+                for dest_id, dest_shop in all_org_shops.items():
+                    if dest_id == src_shop.id:
+                        continue
+
+                    dest_sp = ShopProduct.query.filter_by(shop_id=dest_id, product_id=product.id).first()
+                    if not dest_sp or not dest_sp.is_active:
+                        continue
+
+                    # Compute recipient current sellable stock and low stock threshold
+                    dest_batches = (
+                        InventoryBatch.query.filter_by(
+                            shop_id=dest_id, product_id=product.id, status="ACTIVE"
+                        ).all()
+                    )
+                    dest_sellable_qty = sum(
+                        b.effective_sellable_qty_on(today) for b in dest_batches
+                    )
+                    dest_threshold = int(
+                        dest_sp.low_stock_threshold
+                        or dest_shop.low_stock_default_threshold
+                        or 10
+                    )
+
+                    # Destination is candidate if out of stock, low stock, or can absorb stock
+                    is_dest_deficit = dest_sellable_qty <= dest_threshold
+                    deficit_target = (
+                        max(1, (dest_threshold * 2) - dest_sellable_qty)
+                        if is_dest_deficit
+                        else dest_threshold
+                    )
+                    recommended_qty = min(int(batch.available_qty), int(deficit_target))
+                    if recommended_qty <= 0:
+                        continue
+
+                    # Geographic distance and transit cost
+                    dist_km = 5.0
+                    if (
+                        src_shop.latitude
+                        and src_shop.longitude
+                        and dest_shop.latitude
+                        and dest_shop.longitude
+                    ):
+                        calculated_dist = haversine_distance_km(
+                            float(src_shop.latitude),
+                            float(src_shop.longitude),
+                            float(dest_shop.latitude),
+                            float(dest_shop.longitude),
+                        )
+                        if calculated_dist is not None:
+                            dist_km = calculated_dist
+
+                    if dist_km > max_distance_km:
+                        continue
+
+                    # Logistics cost: Rs 15 per km, minimum Rs 50
+                    est_transport_cost = round(max(50.0, dist_km * 15.0), 2)
+                    gross_margin_salvaged = round(recommended_qty * unit_margin, 2)
+                    net_salvage_profit = round(gross_margin_salvaged - est_transport_cost, 2)
+
+                    if net_salvage_profit < min_net_salvage:
+                        continue
+
+                    # Priority classification
+                    if dest_sellable_qty == 0:
+                        priority = "CRITICAL"
+                        rationale = (
+                            f"Recipient '{dest_shop.name}' is completely OUT OF STOCK. "
+                            f"Transferring {recommended_qty} units prevents stockouts and yields ₹{net_salvage_profit:,.2f} net profit."
+                        )
+                    elif days_left is not None and days_left <= 7:
+                        priority = "HIGH"
+                        rationale = (
+                            f"Source batch '{batch.batch_code}' expires in {days_left} days. "
+                            f"Urgent inter-store transfer salvages ₹{net_salvage_profit:,.2f} before spoilage."
+                        )
+                    elif is_dest_deficit:
+                        priority = "MEDIUM"
+                        rationale = (
+                            f"Recipient stock ({dest_sellable_qty} units) is below threshold ({dest_threshold}). "
+                            f"Rebalancing {recommended_qty} units optimizes network inventory."
+                        )
+                    else:
+                        priority = "LOW"
+                        rationale = (
+                            f"Redistributes {recommended_qty} units from surplus to active sister shop "
+                            f"at ₹{net_salvage_profit:,.2f} net salvage."
+                        )
+
+                    rec_item = {
+                        "source_shop_id": src_shop.id,
+                        "source_shop_name": src_shop.name,
+                        "source_shop_code": src_shop.code,
+                        "recipient_shop_id": dest_shop.id,
+                        "recipient_shop_name": dest_shop.name,
+                        "recipient_shop_code": dest_shop.code,
+                        "product_id": product.id,
+                        "product_name": product.name,
+                        "sku": product.sku,
+                        "category": product.category,
+                        "unit": product.unit,
+                        "source_batch_id": batch.id,
+                        "batch_code": batch.batch_code,
+                        "expiry_date": batch.expiry_date.isoformat() if batch.expiry_date else "N/A",
+                        "days_to_expiry": days_left,
+                        "source_available_qty": batch.available_qty,
+                        "recipient_current_stock": dest_sellable_qty,
+                        "recipient_low_stock_threshold": dest_threshold,
+                        "recommended_transfer_qty": recommended_qty,
+                        "distance_km": dist_km,
+                        "estimated_transport_cost": est_transport_cost,
+                        "gross_margin_salvaged": gross_margin_salvaged,
+                        "net_salvage_profit": net_salvage_profit,
+                        "priority": priority,
+                        "rationale": rationale,
+                    }
+                    recommendations.append(rec_item)
+
+        # Priority order ranking: CRITICAL -> HIGH -> MEDIUM -> LOW, then net_salvage_profit descending
+        priority_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+        recommendations.sort(
+            key=lambda r: (priority_rank.get(r["priority"], 4), -r["net_salvage_profit"])
+        )
+
+        return recommendations
+

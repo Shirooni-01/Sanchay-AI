@@ -1,25 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard &mdash; Sanchay AI{% endblock %}
+{% block title %}Dashboard &mdash; Smart Vendor{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1 class="page-title">Role-Scoped Operational Dashboard</h1>
+        <h1 class="page-title">
+            {% if user.role == 'SUPER_ADMIN' %}
+                Executive Operational Dashboard
+            {% else %}
+                Shop Owner Operations Hub
+            {% endif %}
+        </h1>
         <p class="page-subtitle">
             Signed in as <strong>{{ user.full_name }}</strong> with backend-enforced <span class="role-badge role-{{ user.role | lower }}">{{ user.role }}</span> permissions.
+            {% if organization %}
+                &bull; Organization: <strong>{{ organization.name }}</strong> ({{ organization.code }})
+            {% endif %}
+            {% if selected_shop %}
+                &bull; Active Store: <strong>{{ selected_shop.name }} ({{ selected_shop.code }})</strong>
+            {% endif %}
         </p>
     </div>
     <div class="header-actions">
+        <a href="{{ url_for('reports.reports_page') }}" class="btn btn-primary btn-sm">Reports &amp; Analytics</a>
         <a href="{{ url_for('notifications.notification_center_page') }}" class="btn btn-outline btn-sm">Notification Alerts</a>
         {% if user.role == 'SUPER_ADMIN' %}
             <a href="{{ url_for('admin.organization_page') }}" class="btn btn-outline btn-sm">Organization Settings</a>
-            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-primary btn-sm">Manage Shops</a>
+            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">Manage Shops</a>
         {% elif user.role == 'SHOP_OWNER' %}
-            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-primary btn-sm">My Assigned Shops</a>
-            <a href="{{ url_for('admin.users_page') }}" class="btn btn-outline btn-sm">Manage Shop Staff</a>
-        {% else %}
-            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-primary btn-sm">My Assigned Shops</a>
+            <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">My Assigned Shops</a>
         {% endif %}
     </div>
 </div>
@@ -40,84 +50,161 @@
         <a href="{{ url_for('admin.organization_page') }}" class="btn btn-primary">Create Organization</a>
     {% endif %}
 </div>
-{% else %}
+
+{# ========================================================================= #}
+{# A. SUPER ADMIN EXECUTIVE DASHBOARD                                         #}
+{# ========================================================================= #}
+{% elif user.role == 'SUPER_ADMIN' and org_metrics %}
+
+<!-- KPI Stats Grid -->
 <section class="stats-grid">
     <div class="stat-card">
-        <span class="stat-label">Organization</span>
-        <strong class="stat-value">{{ organization.name }}</strong>
-        <span class="stat-meta">Code: <code>{{ organization.code }}</code> &bull;
-            {% if organization.status == 'ACTIVE' %}
-                <span class="badge-active">ACTIVE</span>
-            {% else %}
-                <span class="badge-inactive">{{ organization.status }}</span>
-            {% endif %}
-        </span>
+        <span class="stat-label">Network Infrastructure</span>
+        <strong class="stat-value">{{ org_metrics.kpis.active_shops }} / {{ org_metrics.kpis.total_shops }}</strong>
+        <span class="stat-meta">Active Shops &bull; {{ org_metrics.kpis.total_products }} Products</span>
     </div>
 
     <div class="stat-card">
-        <span class="stat-label">Accessible Shops</span>
-        <strong class="stat-value">{{ shops | length }}</strong>
-        <span class="stat-meta">
-            {{ shops | selectattr('status', 'equalto', 'ACTIVE') | list | length }} Operational
-        </span>
+        <span class="stat-label">Inventory Volume &amp; Value</span>
+        <strong class="stat-value">{{ '{:,}'.format(org_metrics.kpis.total_stock_qty) }} units</strong>
+        <span class="stat-meta">&#8377;{{ '{:,.2f}'.format(org_metrics.kpis.total_inventory_valuation) }} Total Valuation</span>
     </div>
 
     <div class="stat-card">
-        <span class="stat-label">Default Alert Policy</span>
-        <strong class="stat-value">&le; {{ organization.low_stock_default_threshold }} units</strong>
-        <span class="stat-meta">Near-expiry window: {{ organization.near_expiry_days_threshold }} days</span>
+        <span class="stat-label">Total Completed Sales</span>
+        <strong class="stat-value">&#8377;{{ '{:,.2f}'.format(org_metrics.kpis.gross_revenue) }}</strong>
+        <span class="stat-meta">{{ org_metrics.kpis.total_sales_count }} Orders &bull; &#8377;{{ '{:,.2f}'.format(org_metrics.kpis.gross_profit) }} Profit ({{ org_metrics.kpis.gross_margin_pct }}%)</span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Stock Exchange &amp; Transfers</span>
+        <strong class="stat-value">{{ org_metrics.kpis.completed_transfers_count }}</strong>
+        <span class="stat-meta">Completed Transfers &bull; {{ org_metrics.kpis.pending_transfers_count }} In Progress</span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Near-Expiry Risk</span>
+        <strong class="stat-value" style="color: var(--color-danger);">{{ org_metrics.kpis.near_expiry_batch_count }} batches</strong>
+        <span class="stat-meta">&#8377;{{ '{:,.2f}'.format(org_metrics.kpis.near_expiry_valuation_at_risk) }} Valuation At Risk</span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Stock Health Balance</span>
+        <strong class="stat-value">{{ org_metrics.kpis.low_stock_products_count }} Low / {{ org_metrics.kpis.surplus_products_count }} Surplus</strong>
+        <span class="stat-meta">Redistribution Opportunities Identified</span>
     </div>
 </section>
 
+<!-- Trends and Quick Links Grid -->
+<div class="grid-2-col" style="margin-top: 1.5rem;">
+    <!-- 14-day sales trend -->
+    <div class="chart-card">
+        <div class="chart-card-header">
+            <div>
+                <h3 class="chart-title">14-Day Sales Velocity (Org-Wide)</h3>
+                <p class="chart-subtitle">Daily sales revenue across all active shops</p>
+            </div>
+            <a href="{{ url_for('reports.reports_page', type='SALES') }}" class="btn btn-outline btn-sm">Full Sales Report</a>
+        </div>
+        <div class="chart-container" id="admin-sales-trend-box" data-chart-type="trend" data-chart-data='{{ sales_trends | tojson }}'></div>
+    </div>
+
+    <!-- Quick Operations & Stock Balances -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header card-header-split">
+            <div>
+                <h3 class="card-title">Stock Optimization Hub</h3>
+                <p class="card-subtitle">Deterministic inventory intelligence actions</p>
+            </div>
+            <a href="{{ url_for('reports.reports_page') }}" class="btn btn-outline btn-sm">All Reports</a>
+        </div>
+        <div class="stock-alerts-list">
+            <div class="stock-alert-item alert-item-critical">
+                <div class="stock-alert-content">
+                    <strong class="stock-alert-title">Near-Expiry Alert Batches</strong>
+                    <p class="stock-alert-subtitle">{{ org_metrics.kpis.near_expiry_batch_count }} batches reaching expiration threshold</p>
+                </div>
+                <a href="{{ url_for('reports.reports_page', type='NEAR_EXPIRY') }}" class="btn btn-outline btn-sm btn-alert-critical">Inspect Batches</a>
+            </div>
+
+            <div class="stock-alert-item alert-item-info">
+                <div class="stock-alert-content">
+                    <strong class="stock-alert-title">Inter-Store Surplus Exchange</strong>
+                    <p class="stock-alert-subtitle">{{ org_metrics.kpis.surplus_products_count }} products eligible for redistribution</p>
+                </div>
+                <a href="{{ url_for('transfers.transfers_hub_redirect') }}" class="btn btn-outline btn-sm btn-alert-info">View Transfers</a>
+            </div>
+
+            <div class="stock-alert-item alert-item-success">
+                <div class="stock-alert-content">
+                    <strong class="stock-alert-title">Inventory Valuation &amp; Audits</strong>
+                    <p class="stock-alert-subtitle">Complete stock valuation across {{ org_metrics.kpis.total_shops }} locations</p>
+                </div>
+                <a href="{{ url_for('reports.reports_page', type='INVENTORY') }}" class="btn btn-outline btn-sm btn-alert-success">Valuation Report</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Shop-by-Shop Breakdown Table -->
 <section class="card" style="margin-top: 1.5rem;">
     <div class="card-header card-header-split">
         <div>
-            <h2 class="card-title">Authorized Shops in {{ organization.name }}</h2>
-            <p class="card-subtitle">
-                Only shops within your authorized tenant and role scope are displayed.
-            </p>
+            <h2 class="card-title">Shop-by-Shop Operational Performance</h2>
+            <p class="card-subtitle">Real PostgreSQL transactional totals and inventory balances per location</p>
         </div>
-        <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">Open Full Directory</a>
+        <a href="{{ url_for('admin.shops_page') }}" class="btn btn-outline btn-sm">Manage Directory</a>
     </div>
 
-    {% if shops %}
+    {% if org_metrics.shops_breakdown %}
     <div class="table-responsive">
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Code</th>
-                    <th>Shop Name</th>
-                    <th>City &amp; Pincode</th>
-                    <th>Contact Phone</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style="min-width: 130px;">Shop Code</th>
+                    <th style="min-width: 180px;">Shop Name</th>
+                    <th style="min-width: 100px;">City</th>
+                    <th class="text-right" style="min-width: 100px;">Stock Units</th>
+                    <th class="text-right" style="min-width: 110px;">Valuation</th>
+                    <th class="text-right" style="min-width: 80px;">Sales</th>
+                    <th class="text-right" style="min-width: 115px;">Gross Revenue</th>
+                    <th class="text-right" style="min-width: 110px;">Gross Profit</th>
+                    <th class="text-center" style="min-width: 110px;">Low Stock</th>
+                    <th class="text-center" style="min-width: 120px;">Near Expiry</th>
+                    <th class="text-center" style="min-width: 90px;">Transfers</th>
+                    <th class="text-right" style="min-width: 210px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                {% for shop in shops %}
+                {% for s in org_metrics.shops_breakdown %}
                 <tr>
-                    <td><code>{{ shop.code }}</code></td>
-                    <td><strong>{{ shop.name }}</strong></td>
-                    <td>{{ shop.city }} ({{ shop.pincode }})</td>
-                    <td>{{ shop.contact_phone }}</td>
-                    <td>
-                        {% if shop.status == 'ACTIVE' %}
-                            <span class="badge-active">ACTIVE</span>
-                        {% elif shop.status == 'SUSPENDED' %}
-                            <span class="badge-warning">SUSPENDED</span>
+                    <td><code class="shop-code-cell">{{ s.code }}</code></td>
+                    <td><strong>{{ s.name }}</strong></td>
+                    <td class="text-nowrap">{{ s.city }}</td>
+                    <td class="text-right font-tabular">{{ '{:,}'.format(s.stock_qty) }}</td>
+                    <td class="text-right font-tabular">&#8377;{{ '{:,.2f}'.format(s.inventory_valuation) }}</td>
+                    <td class="text-right font-tabular">{{ s.sales_count }}</td>
+                    <td class="text-right font-tabular">&#8377;{{ '{:,.2f}'.format(s.gross_revenue) }}</td>
+                    <td class="text-right font-tabular text-success">&#8377;{{ '{:,.2f}'.format(s.gross_profit) }}</td>
+                    <td class="text-center">
+                        {% if s.low_stock_count > 0 %}
+                            <span class="badge-risk-warning">{{ s.low_stock_count }} items</span>
                         {% else %}
-                            <span class="badge-inactive">{{ shop.status }}</span>
+                            <span class="badge-active">0</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="text-center">
+                        {% if s.near_expiry_count > 0 %}
+                            <span class="badge-risk-critical">{{ s.near_expiry_count }} batches</span>
+                        {% else %}
+                            <span class="badge-active">0</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center font-tabular">{{ s.completed_transfers }}</td>
+                    <td class="text-right">
                         <div class="action-btn-group">
-                            <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-primary btn-sm">POS</a>
-                            <a href="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Sales</a>
-                            <a href="{{ url_for('catalog.shop_products_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Products</a>
-                            <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Inventory</a>
-                            <a href="{{ url_for('analysis.overview_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Analysis</a>
-                            <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Transfers</a>
-                            <a href="{{ url_for('admin.shop_detail_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Details</a>
+                            <a href="{{ url_for('admin.shop_detail_page', shop_id=s.shop_id) }}" class="btn btn-outline btn-sm">Shop Details</a>
+                            <a href="{{ url_for('reports.reports_page', shop_id=s.shop_id) }}" class="btn btn-outline btn-sm btn-alert-success">Audit Report</a>
                         </div>
                     </td>
                 </tr>
@@ -126,8 +213,286 @@
         </table>
     </div>
     {% else %}
-    <p class="empty-state">No shops are currently assigned or created in this scope.</p>
+    <p class="empty-state">No shops are currently provisioned.</p>
     {% endif %}
 </section>
+
+{# ========================================================================= #}
+{# B. SHOP OWNER OPERATIONAL DASHBOARD                                        #}
+{# ========================================================================= #}
+{% elif selected_shop and shop_metrics %}
+
+<!-- Shop Switcher (if owner has multiple shops) -->
+{% if shops | length > 1 %}
+<section class="card" style="margin-bottom: 1.25rem; padding: 0.75rem 1.25rem;">
+    <form method="GET" action="{{ url_for('admin.dashboard_page') }}" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <label for="shop-switcher" style="font-weight: 600; font-size: 0.9rem;">Switch Active Shop:</label>
+        <select name="shop_id" id="shop-switcher" class="form-control form-control-sm" style="min-width: 220px;" onchange="this.form.submit()">
+            {% for s in shops %}
+                <option value="{{ s.id }}" {% if selected_shop.id == s.id %}selected{% endif %}>
+                    {{ s.name }} ({{ s.code }}) &bull; {{ s.city }}
+                </option>
+            {% endfor %}
+        </select>
+        <noscript><button type="submit" class="btn btn-primary btn-sm">Switch</button></noscript>
+    </form>
+</section>
 {% endif %}
+
+<!-- Shop KPI Stats Grid -->
+<section class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-label">Available Sellable Stock</span>
+        <strong class="stat-value">{{ '{:,}'.format(shop_metrics.inventory.sellable_qty) }} units</strong>
+        <span class="stat-meta">
+            {{ shop_metrics.inventory.total_products }} Products &bull; {{ shop_metrics.inventory.reserved_qty }} Reserved
+        </span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Inventory Valuation</span>
+        <strong class="stat-value">&#8377;{{ '{:,.2f}'.format(shop_metrics.inventory.cost_valuation) }}</strong>
+        <span class="stat-meta">&#8377;{{ '{:,.2f}'.format(shop_metrics.inventory.retail_valuation) }} Retail Value</span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Completed Sales</span>
+        <strong class="stat-value">&#8377;{{ '{:,.2f}'.format(shop_metrics.sales.gross_revenue) }}</strong>
+        <span class="stat-meta">{{ shop_metrics.sales.sales_count }} Orders &bull; &#8377;{{ '{:,.2f}'.format(shop_metrics.sales.average_order_value) }} AOV</span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Gross Profit</span>
+        <strong class="stat-value" style="color: var(--color-success);">&#8377;{{ '{:,.2f}'.format(shop_metrics.sales.gross_profit) }}</strong>
+        <span class="stat-meta">{{ shop_metrics.sales.gross_margin_pct }}% Profit Margin &bull; &#8377;{{ '{:,.2f}'.format(shop_metrics.sales.cogs) }} COGS</span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Transfer Pipeline</span>
+        <strong class="stat-value">{{ shop_metrics.transfers.incoming_pending_count }} In / {{ shop_metrics.transfers.outgoing_pending_count }} Out</strong>
+        <span class="stat-meta">{{ shop_metrics.transfers.completed_count }} Completed Transfers</span>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Damaged &amp; Expired</span>
+        <strong class="stat-value" style="color: var(--color-danger);">{{ shop_metrics.inventory.expired_qty }} Exp / {{ shop_metrics.inventory.damaged_qty }} Damaged</strong>
+        <span class="stat-meta">Stock Scraping Required</span>
+    </div>
+</section>
+
+<!-- 14-Day Sales Velocity & Transfers Grid -->
+<div class="grid-2-col" style="margin-top: 1.5rem;">
+    <div class="chart-card">
+        <div class="chart-card-header">
+            <div>
+                <h3 class="chart-title">14-Day Daily Sales Velocity</h3>
+                <p class="chart-subtitle">Store sales trend (INR)</p>
+            </div>
+            <a href="{{ url_for('sales.sales_history_page', shop_id=selected_shop.id) }}" class="btn btn-outline btn-sm">Sales History</a>
+        </div>
+        <div class="chart-container" id="shop-sales-trend-box" data-chart-type="trend" data-chart-data='{{ sales_trends | tojson }}'></div>
+    </div>
+
+    <!-- Quick Operations Navigation -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header card-header-split">
+            <div>
+                <h3 class="card-title">Shop Actions &amp; Workflows</h3>
+                <p class="card-subtitle">{{ selected_shop.name }} Operations</p>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; padding-top: 0.5rem;">
+            <a href="{{ url_for('sales.pos_counter_page', shop_id=selected_shop.id) }}" class="btn btn-primary" style="justify-content: center; padding: 0.85rem;">
+                Launch POS Billing
+            </a>
+            <a href="{{ url_for('inventory.shop_inventory_overview_page', shop_id=selected_shop.id) }}" class="btn btn-outline" style="justify-content: center; padding: 0.85rem;">
+                Manage Inventory
+            </a>
+            <a href="{{ url_for('analysis.overview_page', shop_id=selected_shop.id) }}" class="btn btn-outline" style="justify-content: center; padding: 0.85rem;">
+                Stock Risk Analysis
+            </a>
+            <a href="{{ url_for('transfers.shop_transfers_list', shop_id=selected_shop.id) }}" class="btn btn-outline" style="justify-content: center; padding: 0.85rem;">
+                Transfer Exchange ({{ shop_metrics.transfers.incoming_pending_count + shop_metrics.transfers.outgoing_pending_count }})
+            </a>
+            <a href="{{ url_for('reports.reports_page', shop_id=selected_shop.id) }}" class="btn btn-outline" style="justify-content: center; padding: 0.85rem; grid-column: span 2;">
+                Store Reports &amp; CSV Export
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Alerts Grid: Low Stock & Near Expiry -->
+<div class="grid-2-col" style="margin-top: 1.5rem;">
+    <!-- Low Stock Alert Table -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header card-header-split">
+            <div>
+                <h3 class="card-title">Low Stock Replenishment Alerts</h3>
+                <p class="card-subtitle">Products below configured reorder threshold</p>
+            </div>
+            <a href="{{ url_for('analysis.low_stock_page', shop_id=selected_shop.id) }}" class="btn btn-outline btn-sm">Full Analysis</a>
+        </div>
+
+        {% if shop_metrics.alerts.low_stock_items %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Category</th>
+                        <th>Stock</th>
+                        <th>Reorder Level</th>
+                        <th>Deficit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in shop_metrics.alerts.low_stock_items %}
+                    <tr>
+                        <td>
+                            <strong>{{ item.product_name }}</strong><br>
+                            <code style="font-size: 0.75rem;">{{ item.sku }}</code>
+                        </td>
+                        <td>{{ item.category or '—' }}</td>
+                        <td><strong style="color: var(--color-danger);">{{ item.current_stock }}</strong></td>
+                        <td>{{ item.reorder_level }}</td>
+                        <td><span class="badge-risk-warning">+{{ item.deficit }} units</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">All products are adequately stocked above reorder thresholds.</p>
+        {% endif %}
+    </div>
+
+    <!-- Near Expiry Batches Table -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header card-header-split">
+            <div>
+                <h3 class="card-title">Near-Expiry FEFO Batches</h3>
+                <p class="card-subtitle">Stock batches approaching expiration window</p>
+            </div>
+            <a href="{{ url_for('analysis.expiry_risk_page', shop_id=selected_shop.id) }}" class="btn btn-outline btn-sm">Expiry Risk</a>
+        </div>
+
+        {% if shop_metrics.alerts.near_expiry_items %}
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Batch Code</th>
+                        <th>Product</th>
+                        <th>Days Left</th>
+                        <th>Qty</th>
+                        <th>At-Risk Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in shop_metrics.alerts.near_expiry_items %}
+                    <tr>
+                        <td><code>{{ b.batch_code }}</code></td>
+                        <td><strong>{{ b.product_name }}</strong></td>
+                        <td>
+                            {% if b.days_left <= 7 %}
+                                <span class="badge-risk-critical">{{ b.days_left }}d</span>
+                            {% else %}
+                                <span class="badge-risk-warning">{{ b.days_left }}d</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ b.quantity }}</td>
+                        <td style="color: var(--color-danger); font-weight: 600;">&#8377;{{ '{:,.2f}'.format(b.valuation_at_risk) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No batches are in the critical near-expiry window.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Activity Feeds: Recent Sales & Stock Movements -->
+<div class="grid-2-col" style="margin-top: 1.5rem;">
+    <!-- Recent Completed Sales -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header card-header-split">
+            <div>
+                <h3 class="card-title">Recent Completed Sales</h3>
+                <p class="card-subtitle">Latest counter invoices</p>
+            </div>
+            <a href="{{ url_for('sales.sales_history_page', shop_id=selected_shop.id) }}" class="btn btn-outline btn-sm">View All</a>
+        </div>
+
+        {% if shop_metrics.activity.recent_sales %}
+        <ul class="activity-feed-list" style="margin-top: 0.5rem;">
+            {% for s in shop_metrics.activity.recent_sales %}
+            <li class="activity-feed-item">
+                <div class="activity-feed-main">
+                    <strong><code>{{ s.invoice_number }}</code> &bull; {{ s.customer_name }}</strong>
+                    <span class="activity-feed-meta">{{ s.payment_mode }} &bull; {{ s.created_at[:16] if s.created_at else '—' }}</span>
+                </div>
+                <strong style="color: var(--color-success); font-size: 0.95rem;">&#8377;{{ '{:,.2f}'.format(s.total_amount) }}</strong>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No sales transactions recorded yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- Recent Stock Movements -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header card-header-split">
+            <div>
+                <h3 class="card-title">Recent Stock Movements</h3>
+                <p class="card-subtitle">Immutable ledger journal</p>
+            </div>
+            <a href="{{ url_for('inventory.stock_movements_page', shop_id=selected_shop.id) }}" class="btn btn-outline btn-sm">Movement Ledger</a>
+        </div>
+
+        {% if shop_metrics.activity.recent_stock_movements %}
+        <ul class="activity-feed-list" style="margin-top: 0.5rem;">
+            {% for m in shop_metrics.activity.recent_stock_movements %}
+            <li class="activity-feed-item">
+                <div class="activity-feed-main">
+                    <strong>{{ m.product_name }} &bull; <code>{{ m.batch_code }}</code></strong>
+                    <span class="activity-feed-meta">{{ m.movement_type }} &bull; Balance: {{ m.balance_after }}</span>
+                </div>
+                <strong style="color: var(--color-text);">{{ m.quantity }} units</strong>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">No stock ledger movements logged yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% else %}
+<p class="empty-state">No shop profile is currently accessible for this account.</p>
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var salesTrends = {{ sales_trends | tojson }};
+    {% if user.role == 'SUPER_ADMIN' %}
+        var targetBox = document.getElementById('admin-sales-trend-box');
+        if (targetBox && salesTrends && salesTrends.length > 0) {
+            window.SanchayCharts.renderTrendLineChart(targetBox, salesTrends, { valueKey: 'revenue' });
+        } else if (targetBox) {
+            targetBox.innerHTML = '<div class="empty-state">No sales transactions logged in the past 14 days.</div>';
+        }
+    {% elif selected_shop %}
+        var shopBox = document.getElementById('shop-sales-trend-box');
+        if (shopBox && salesTrends && salesTrends.length > 0) {
+            window.SanchayCharts.renderTrendLineChart(shopBox, salesTrends, { valueKey: 'revenue' });
+        } else if (shopBox) {
+            shopBox.innerHTML = '<div class="empty-state">No sales transactions logged in the past 14 days.</div>';
+        }
+    {% endif %}
+});
+</script>
 {% endblock %}

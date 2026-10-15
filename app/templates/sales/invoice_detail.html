@@ -12,8 +12,10 @@
         </p>
     </div>
     <div class="header-actions">
-        <a href="{{ url_for('sales.sale_receipt_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-primary btn-sm">Open Printable Receipt</a>
-        <a href="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Back to Sales History</a>
+        <a href="{{ url_for('sales.sale_receipt_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-primary btn-sm">Receipt</a>
+        <a href="{{ url_for('sales.sale_thermal_slip_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-outline btn-sm" target="_blank">&#129534; Thermal Slip</a>
+        <a href="{{ url_for('sales.sale_tax_invoice_page', shop_id=shop.id, sale_id=sale.id) }}" class="btn btn-outline btn-sm" target="_blank">&#128196; Tax Invoice</a>
+        <a href="{{ url_for('sales.sales_history_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">Sales History</a>
         <a href="{{ url_for('sales.pos_counter_page', shop_id=shop.id) }}" class="btn btn-outline btn-sm">POS Counter</a>
     </div>
 </div>

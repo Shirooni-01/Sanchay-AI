@@ -7,7 +7,7 @@ import os
 from logging.handlers import RotatingFileHandler
 from typing import Any
 
-from flask import Flask, jsonify, redirect, request, url_for
+from flask import Flask, g, jsonify, redirect, request, url_for
 
 from app.blueprints.admin import admin_bp
 from app.blueprints.analysis import analysis_bp
@@ -15,6 +15,7 @@ from app.blueprints.auth import auth_bp
 from app.blueprints.catalog import catalog_bp
 from app.blueprints.inventory import inventory_bp
 from app.blueprints.notifications import notifications_bp
+from app.blueprints.reports import reports_bp
 from app.blueprints.sales import sales_bp
 from app.blueprints.transfers import transfers_bp
 from app.cli import register_cli_commands
@@ -59,6 +60,11 @@ def _configure_logging(app: Flask) -> None:
 def _register_security_hooks(app: Flask) -> None:
     """Attach HTTP security headers and unauthorized access handlers."""
 
+    @app.before_request
+    def clear_request_login_user():
+        if "_login_user" in g:
+            del g._login_user
+
     @login_manager.unauthorized_handler
     def handle_unauthorized():
         if wants_json_response():
@@ -80,7 +86,7 @@ def _register_security_hooks(app: Flask) -> None:
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;",
+            "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:;",
         )
         # Prevent browser caching of authenticated pages or auth responses
         if (
@@ -98,6 +104,8 @@ def _register_security_hooks(app: Flask) -> None:
             or request.path.startswith("/analysis")
             or request.path.startswith("/transfers")
             or request.path.startswith("/notifications")
+            or request.path.startswith("/reports")
+            or request.path.startswith("/analytics")
             or request.path == "/"
         ):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -146,6 +154,7 @@ def create_app(
     app.register_blueprint(analysis_bp)
     app.register_blueprint(transfers_bp)
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(reports_bp)
     register_error_handlers(app)
     _register_security_hooks(app)
     register_cli_commands(app)

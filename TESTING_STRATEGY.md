@@ -157,7 +157,27 @@ Enforces `BR-006` and `NFR-002`:
 
 ---
 
-### 3.8 Phase 8 AI Evaluation Methodology (`tests/test_phase8_ai_intelligence.py` — PHASE 8 ONLY)
+### 3.8 Dashboards, Operational Analytics & Reports Tests (`tests/test_phase8_reports_dashboards.py` — VERIFIED)
+- **Status:** `14 passed, 0 failed` in `tests/test_phase8_reports_dashboards.py` (`111/111` total passing across Phases 1–8 against local PostgreSQL `sanchay_ai_test`).
+- **Verified Phase 8 Test Suite Matrix (Enforces `FR-055` through `FR-060`):**
+  1. **Super Admin Dashboard Metrics (`test_super_admin_dashboard_metrics`):** Verifies organization-wide network aggregation: total/active shop counts, distinct products, stock unit counts, total inventory valuation, gross sales revenue, COGS, gross profit margins, completed/pending transfers, near-expiry batch counts, at-risk valuation, and shop-by-shop breakdown.
+  2. **Organization Summary API (`test_api_organization_summary_endpoint`):** Tests authenticated endpoint `GET /api/v1/reports/organization/summary` (`API-039`), verifying JSON payload structure, numeric precision, and strict `SUPER_ADMIN` role restriction (`403` for non-admins).
+  3. **Shop Owner Dashboard Metrics (`test_shop_owner_dashboard_metrics`):** Verifies shop-scoped operational metrics: sellable vs. reserved vs. damaged/expired units, retail vs. cost valuation, sales volume, profit margins, transfer incoming/outgoing pipeline, actionable low-stock items, and near-expiry FEFO batches.
+  4. **Strict Shop-Level Isolation Enforcement (`test_shop_level_isolation_enforcement`):** Verifies that a Shop Owner attempting to query analytics or summaries for an unassigned sister shop is blocked with `403 UNAUTHORIZED_SHOP_ACCESS`.
+  5. **Continuous Sales Trends (`test_sales_trends_daily_and_monthly`):** Verifies daily and monthly time-series aggregation with continuous zero-filling, ensuring days with no sales return `0.0` revenue and `0` orders rather than missing dates.
+  6. **Trends API Endpoint (`test_api_analytics_trends_endpoint`):** Tests `GET /api/v1/reports/analytics/trends` with `days`, `group_by`, and `shop_id` query parameters.
+  7. **Top-Selling Products (`test_top_selling_products`):** Verifies ranking of products by quantity volume and revenue, date filtering, and product metadata.
+  8. **Stock Distribution Analytics (`test_stock_distribution`):** Verifies multi-dimensional stock categorization: by product category, by batch status (`ACTIVE`, `EXPIRED`, `DEPLETED`), and by expiry risk horizons (`< 7 days`, `7-30 days`, `> 30 days`).
+  9. **Transfer Activity Analytics (`test_transfer_activity`):** Verifies transfer metrics: completed, pending, rejected, cancelled, transit volume, and partner exchange activity.
+  10. **Report Generation Types (`test_generate_report_types`):** Verifies report generation across all 4 report types (`SALES`, `INVENTORY`, `NEAR_EXPIRY`, `TRANSFERS`) with category filtering and summary statistics.
+  11. **Date Range Validation (`test_date_range_validation_errors`):** Verifies strict validation rules: invalid date formats return `400 INVALID_PARAMETER`, and `start_date > end_date` returns `400 INVALID_DATE_RANGE`.
+  12. **Streaming RFC 4180 CSV Export (`test_csv_export_streaming`):** Tests `GET /api/v1/reports/export` (`API-040`), verifying HTTP headers (`text/csv`, `attachment; filename=...`), CSV column headers, and data rows formatted according to RFC 4180.
+  13. **Empty Dataset Handling (`test_empty_shop_graceful_handling`):** Verifies graceful zero-handling when querying a freshly created shop with zero inventory, sales, or transfers.
+  14. **HTML Dashboard & Reports Hub Rendering (`test_html_dashboard_and_reports_pages`):** Verifies end-to-end rendering of `/dashboard`, `/reports`, `/analytics` redirect, SVG charts container, and CSV export buttons for both Super Admin and Shop Owner roles.
+
+---
+
+### 3.9 Phase 10 AI Evaluation Methodology (`tests/test_phase10_ai_intelligence.py` — PHASE 10 ONLY)
 - **Walk-Forward Time-Series Backtesting:**
   - Splits historical daily sales per `(shop_id, product_id)` chronologically (e.g., Days 1–46 train, Days 47–60 test; never random shuffle which causes data leakage).
   - Computes **Mean Absolute Error (MAE)**, **Root Mean Squared Error (RMSE)**, and **Symmetric MAPE (sMAPE)** for candidate models against the **7-Day Moving Average Baseline**.

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import click
 from flask import Flask
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
@@ -29,7 +29,7 @@ def register_cli_commands(app: Flask) -> None:
         "--role",
         default="SUPER_ADMIN",
         show_default=True,
-        type=click.Choice(["SUPER_ADMIN", "SHOP_OWNER", "STAFF"], case_sensitive=False),
+        type=click.Choice(["SUPER_ADMIN", "SHOP_OWNER"], case_sensitive=False),
         help="User role.",
     )
     @click.option("--phone", default=None, help="Optional contact phone number.")
@@ -108,6 +108,91 @@ def register_cli_commands(app: Flask) -> None:
             if exc.details:
                 for field, msg in exc.details.items():
                     click.secho(f"  - {field}: {msg}", fg="yellow", err=True)
+            raise SystemExit(1) from exc
+
+    @app.cli.command("reset-password")
+    @click.option("--username", required=True, help="Username or email of the user.")
+    @click.option(
+        "--password",
+        prompt=True,
+        hide_input=True,
+        confirmation_prompt=True,
+        help="New password (min 8 chars, upper, lower, digit).",
+    )
+    def reset_password_command(username: str, password: str) -> None:
+        """Reset or change the password for any user by username or email."""
+        from app.models.user import User
+        from app.services.audit_service import AuditService
+        from app.utils.validators import validate_password_strength
+
+        clean_user = username.strip().lower()
+        user = (
+            db.session.query(User)
+            .filter(
+                or_(
+                    func.lower(User.username) == clean_user,
+                    func.lower(User.email) == clean_user,
+                )
+            )
+            .first()
+        )
+        if user is None:
+            click.secho(f"Error: User '{username}' was not found.", fg="red", err=True)
+            raise SystemExit(1)
+
+        try:
+            validated_pwd = validate_password_strength(password, field_name="password")
+            user.set_password(validated_pwd)
+            user.rotate_session_token()
+            AuditService.record(
+                action="USER_PASSWORD_RESET_CLI",
+                entity_type="USER",
+                entity_id=user.id,
+                actor=user,
+            )
+            db.session.commit()
+            click.secho(
+                f"Password for '{user.username}' ({user.email}, role: {user.role}) successfully updated.",
+                fg="green",
+            )
+        except DomainError as exc:
+            db.session.rollback()
+            click.secho(f"Error: {exc.message}", fg="red", err=True)
+            raise SystemExit(1) from exc
+        except SQLAlchemyError as exc:
+            db.session.rollback()
+            click.secho(f"Database error: {exc}", fg="red", err=True)
+            raise SystemExit(1) from exc
+
+    @app.cli.command("list-users")
+    def list_users_command() -> None:
+        """List all users, emails, roles, and active statuses."""
+        from app.models.user import User
+
+        users = db.session.query(User).order_by(User.id.asc()).all()
+        if not users:
+            click.echo("No users found in database.")
+            return
+
+        click.secho(f"{'ID':<5} {'Username':<18} {'Role':<14} {'Active':<8} {'Email':<25} {'Full Name'}", bold=True)
+        click.echo("-" * 80)
+        for u in users:
+            status = "Yes" if u.is_active else "No"
+            click.echo(f"{u.id:<5} {u.username:<18} {u.role:<14} {status:<8} {u.email:<25} {u.full_name}")
+
+    @app.cli.command("seed-demo")
+    def seed_demo_command() -> None:
+        """Seed complete demo scenario: 2 shops, shop owners, products, batches, and sales."""
+        from scripts.seed_demo_data import seed_all
+        try:
+            results = seed_all()
+            click.secho(
+                f"Successfully seeded demo database: {results['shops']} shops, {results['users']} users, {results['products']} products, {results['batches']} inventory batches.",
+                fg="green",
+            )
+        except Exception as exc:
+            db.session.rollback()
+            click.secho(f"Failed to seed demo data: {exc}", fg="red", err=True)
             raise SystemExit(1) from exc
 
     @app.cli.command("db-check")

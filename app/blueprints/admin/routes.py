@@ -16,6 +16,7 @@ from flask import (
 )
 from flask_login import current_user, login_required
 
+from app.extensions import db
 from app.models.organization import Organization, Shop
 from app.models.user import User
 from app.services.org_service import (
@@ -23,6 +24,7 @@ from app.services.org_service import (
     OrganizationService,
     ShopService,
 )
+from app.services.report_service import ReportService
 from app.utils.decorators import (
     require_organization_access,
     require_role,
@@ -54,18 +56,54 @@ def _meta_now() -> dict[str, str]:
 @admin_bp.route("/dashboard", methods=["GET"])
 @login_required
 def dashboard_page():
-    """Render role-appropriate Phase 2 Dashboard."""
+    """Render role-appropriate Phase 8 Operational Dashboard."""
     user: User = current_user._get_current_object()
     org: Organization | None = user.organization
     shops: list[Shop] = []
     if org is not None:
         shops = ShopService.list_shops(actor=user)
 
+    org_metrics: dict[str, Any] | None = None
+    shop_metrics: dict[str, Any] | None = None
+    sales_trends: list[dict[str, Any]] = []
+    selected_shop: Shop | None = None
+
+    if user.role == "SUPER_ADMIN" and org is not None:
+        try:
+            org_metrics = ReportService.get_organization_dashboard_metrics(actor=user)
+            sales_trends = ReportService.get_sales_trends(actor=user, shop_id=None, days=14)
+        except DomainError:
+            pass
+    elif user.role == "SHOP_OWNER":
+        raw_shop_id = request.args.get("shop_id")
+        target_shop_id = None
+        if raw_shop_id:
+            try:
+                target_shop_id = int(raw_shop_id)
+            except ValueError:
+                target_shop_id = None
+
+        if target_shop_id:
+            selected_shop = next((s for s in shops if s.id == target_shop_id), None)
+        if not selected_shop and shops:
+            selected_shop = shops[0]
+
+        if selected_shop:
+            try:
+                shop_metrics = ReportService.get_shop_dashboard_metrics(actor=user, shop_id=selected_shop.id)
+                sales_trends = ReportService.get_sales_trends(actor=user, shop_id=selected_shop.id, days=14)
+            except DomainError:
+                pass
+
     return render_template(
         "admin/dashboard.html",
         user=user,
         organization=org,
         shops=shops,
+        selected_shop=selected_shop,
+        org_metrics=org_metrics,
+        shop_metrics=shop_metrics,
+        sales_trends=sales_trends,
     )
 
 
@@ -267,12 +305,6 @@ def shop_detail_page(shop_id: int):
                 for u in MembershipService.list_users(actor=user)
                 if u.role != "SUPER_ADMIN" and u.is_active
             ]
-        else:
-            assignable_users = [
-                u
-                for u in MembershipService.list_users(actor=user)
-                if u.role == "STAFF" and u.is_active
-            ]
 
     return render_template(
         "admin/shop_detail.html",
@@ -323,13 +355,13 @@ def update_shop_action(shop_id: int):
 
 
 @admin_bp.route("/shops/<int:shop_id>/assignments", methods=["POST"])
-@login_required
+@require_role("SUPER_ADMIN")
 def assign_shop_member_action(shop_id: int):
     """Handle form submission to assign a user to a shop."""
     user: User = current_user._get_current_object()
     payload = {
         "user_id": request.form.get("user_id"),
-        "assignment_role": request.form.get("assignment_role", "STAFF"),
+        "assignment_role": "SHOP_OWNER",
         "is_primary": request.form.get("is_primary", "true"),
         "is_active": "true",
     }
@@ -413,7 +445,7 @@ def users_page():
 
 
 @admin_bp.route("/users/create", methods=["POST"])
-@require_role("SUPER_ADMIN", "SHOP_OWNER")
+@require_role("SUPER_ADMIN")
 def create_user_action():
     """Handle form submission to create a new organization user / shop member."""
     user: User = current_user._get_current_object()
@@ -422,7 +454,7 @@ def create_user_action():
         "email": request.form.get("email"),
         "full_name": request.form.get("full_name"),
         "phone": request.form.get("phone"),
-        "role": request.form.get("role", "STAFF"),
+        "role": request.form.get("role", "SHOP_OWNER"),
         "password": request.form.get("password"),
         "shop_id": request.form.get("shop_id"),
     }
@@ -485,6 +517,49 @@ def update_user_action(user_id: int):
         flash(f"User '{updated.username}' updated successfully.", "success")
     except DomainError as exc:
         flash(exc.message, "error")
+    return redirect(url_for("admin.users_page"))
+
+
+@admin_bp.route("/users/<int:user_id>/reset-password", methods=["POST"])
+@require_role("SUPER_ADMIN")
+def reset_user_password_action(user_id: int):
+    """Allow Super Admin to reset a user's password directly from the Web UI."""
+    actor: User = current_user._get_current_object()
+    new_password = (request.form.get("new_password") or "").strip()
+
+    target_user = db.session.get(User, user_id)
+    if not target_user:
+        flash(f"User #{user_id} was not found.", "error")
+        return redirect(url_for("admin.users_page"))
+
+    if actor.organization_id is not None and target_user.organization_id != actor.organization_id:
+        flash("Cannot modify user belonging to another organization.", "error")
+        return redirect(url_for("admin.users_page"))
+
+    try:
+        from app.services.audit_service import AuditService
+        from app.utils.validators import validate_password_strength
+
+        validated_pwd = validate_password_strength(new_password, field_name="new_password")
+        target_user.set_password(validated_pwd)
+        target_user.rotate_session_token()
+        AuditService.record(
+            action="USER_PASSWORD_RESET_ADMIN",
+            entity_type="USER",
+            entity_id=target_user.id,
+            actor=actor,
+            organization_id=actor.organization_id,
+            ip_address=_client_ip(),
+            user_agent=_client_ua(),
+        )
+        db.session.commit()
+        flash(f"Password for user '{target_user.username}' successfully reset.", "success")
+    except DomainError as exc:
+        flash(exc.message, "error")
+    except Exception:
+        db.session.rollback()
+        flash("Failed to reset password due to a server error.", "error")
+
     return redirect(url_for("admin.users_page"))
 
 
@@ -805,7 +880,7 @@ def api_update_user(user_id: int):
 @admin_bp.route("/api/v1/shops/<int:shop_id>/assignments", methods=["POST"])
 @login_required
 def api_assign_user_to_shop(shop_id: int):
-    """Assign a user (SHOP_OWNER or STAFF) to a shop within the same organization."""
+    """Assign a user (SHOP_OWNER) to a shop within the same organization."""
     user: User = current_user._get_current_object()
     payload = request.get_json(silent=True) or {}
     assignment = MembershipService.assign_user_to_shop(

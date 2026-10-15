@@ -1,30 +1,82 @@
 {% extends "base.html" %}
 
-{% block title %}Sign In &mdash; Sanchay AI{% endblock %}
+{% block title %}Sign In &mdash; Smart Vendor{% endblock %}
 
 {% block content %}
 <section class="auth-wrapper">
     <div class="card auth-card">
+        <!-- Portal Selection Tabs (Organization vs Shop) -->
+        <div class="portal-toggle-group" role="tablist" aria-label="Portal Selection">
+            <a
+                href="{{ url_for('auth.login_page', portal='organization') }}"
+                class="btn-portal-tab {% if login_type != 'shop' %}active{% endif %}"
+                id="tab-portal-org"
+                data-portal="organization"
+                role="tab"
+                aria-selected="{% if login_type != 'shop' %}true{% else %}false{% endif %}"
+            >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                Organization Login
+            </a>
+            <a
+                href="{{ url_for('auth.login_page', portal='shop') }}"
+                class="btn-portal-tab {% if login_type == 'shop' %}active{% endif %}"
+                id="tab-portal-shop"
+                data-portal="shop"
+                role="tab"
+                aria-selected="{% if login_type == 'shop' %}true{% else %}false{% endif %}"
+            >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                Shop Login
+            </a>
+        </div>
+
         <div class="card-header">
-            <h1 class="card-title">Sign In to Sanchay AI</h1>
-            <p class="card-subtitle">Enter your organization username or email and password to continue.</p>
+            <h1 class="card-title" id="portal-title">
+                {% if login_type == 'shop' %}
+                    Shop Portal Sign In
+                {% else %}
+                    Organization Portal Sign In
+                {% endif %}
+            </h1>
+            <p class="card-subtitle" id="portal-subtitle">
+                {% if login_type == 'shop' %}
+                    Enter your Shop Owner credentials to manage store inventory &amp; billing.
+                {% else %}
+                    Enter your Organization Administrator credentials to manage network operations.
+                {% endif %}
+            </p>
         </div>
 
         <form action="{{ url_for('auth.login_page') }}" method="POST" class="stack-form" novalidate id="login-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="login_type" id="login-type-input" value="{{ login_type | default('organization', true) }}">
             {% if request.args.get('next') %}
             <input type="hidden" name="next" value="{{ request.args.get('next') }}">
             {% endif %}
 
             <div class="form-group">
-                <label for="identifier" class="form-label">Username or Email</label>
+                <label for="identifier" class="form-label" id="portal-user-label">
+                    {% if login_type == 'shop' %}
+                        Shop Username or Email
+                    {% else %}
+                        Admin Username or Email
+                    {% endif %}
+                </label>
                 <input
                     type="text"
                     id="identifier"
                     name="identifier"
                     class="form-input"
                     value="{{ identifier | default('', true) }}"
-                    placeholder="e.g. admin_user or user@sanchay.local"
+                    placeholder="{% if login_type == 'shop' %}e.g. owner_andheri or shop{% else %}e.g. admin_rajesh or admin{% endif %}"
                     autocomplete="username"
                     maxlength="150"
                     required
@@ -33,25 +85,124 @@
             </div>
 
             <div class="form-group">
-                <label for="password" class="form-label">Password</label>
-                <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    class="form-input"
-                    placeholder="Enter your password"
-                    autocomplete="current-password"
-                    maxlength="256"
-                    required
-                >
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                    <label for="password" class="form-label" style="margin-bottom: 0;">Password</label>
+                    <button type="button" class="btn-text-link" id="btn-toggle-pwd-visibility" style="font-size: 0.78rem; background: none; border: none; color: var(--color-text-secondary); cursor: pointer;">
+                        Show Password
+                    </button>
+                </div>
+                <div class="password-input-wrap">
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        class="form-input"
+                        value="{{ password | default('', true) }}"
+                        placeholder="Enter your password"
+                        autocomplete="current-password"
+                        maxlength="256"
+                        required
+                    >
+                </div>
             </div>
 
-            <div class="form-actions">
+            <div class="form-actions" style="margin-top: 1.25rem;">
                 <button type="submit" class="btn btn-primary btn-block" id="login-submit-btn">
-                    Sign In
+                    {% if login_type == 'shop' %}
+                        Sign In to Shop
+                    {% else %}
+                        Sign In to Organization
+                    {% endif %}
                 </button>
             </div>
         </form>
     </div>
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const orgTab = document.getElementById('tab-portal-org');
+    const shopTab = document.getElementById('tab-portal-shop');
+    const typeInput = document.getElementById('login-type-input');
+    const titleEl = document.getElementById('portal-title');
+    const subtitleEl = document.getElementById('portal-subtitle');
+    const userLabelEl = document.getElementById('portal-user-label');
+    const idInput = document.getElementById('identifier');
+    const passwordInput = document.getElementById('password');
+    const submitBtn = document.getElementById('login-submit-btn');
+    const togglePwdBtn = document.getElementById('btn-toggle-pwd-visibility');
+
+    const ORG_USER = '{{ org_default_user | default("admin") }}';
+    const ORG_PASS = '{{ org_default_pass | default("orga") }}';
+    const SHOP_USER = '{{ shop_default_user | default("shop") }}';
+    const SHOP_PASS = '{{ shop_default_pass | default("12345") }}';
+
+    function setPortal(portal) {
+        if (portal === 'shop') {
+            shopTab.classList.add('active');
+            shopTab.setAttribute('aria-selected', 'true');
+            orgTab.classList.remove('active');
+            orgTab.setAttribute('aria-selected', 'false');
+            typeInput.value = 'shop';
+
+            titleEl.textContent = 'Shop Portal Sign In';
+            subtitleEl.textContent = 'Enter your Shop Owner credentials to manage store inventory & billing.';
+            userLabelEl.textContent = 'Shop Username or Email';
+            idInput.placeholder = 'e.g. shop or owner_andheri';
+            submitBtn.textContent = 'Sign In to Shop';
+
+            // Auto-populate fixed credentials
+            idInput.value = SHOP_USER;
+            passwordInput.value = SHOP_PASS;
+
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', '?portal=shop');
+            }
+        } else {
+            orgTab.classList.add('active');
+            orgTab.setAttribute('aria-selected', 'true');
+            shopTab.classList.remove('active');
+            shopTab.setAttribute('aria-selected', 'false');
+            typeInput.value = 'organization';
+
+            titleEl.textContent = 'Organization Portal Sign In';
+            subtitleEl.textContent = 'Enter your Organization Administrator credentials to manage network operations.';
+            userLabelEl.textContent = 'Admin Username or Email';
+            idInput.placeholder = 'e.g. admin or admin@organization.com';
+            submitBtn.textContent = 'Sign In to Organization';
+
+            // Auto-populate fixed credentials
+            idInput.value = ORG_USER;
+            passwordInput.value = ORG_PASS;
+
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(null, '', '?portal=organization');
+            }
+        }
+    }
+
+    if (orgTab && shopTab) {
+        orgTab.addEventListener('click', function(e) {
+            e.preventDefault();
+            setPortal('organization');
+        });
+        shopTab.addEventListener('click', function(e) {
+            e.preventDefault();
+            setPortal('shop');
+        });
+    }
+
+    if (togglePwdBtn && passwordInput) {
+        togglePwdBtn.addEventListener('click', function() {
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                togglePwdBtn.textContent = 'Hide Password';
+            } else {
+                passwordInput.type = 'password';
+                togglePwdBtn.textContent = 'Show Password';
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

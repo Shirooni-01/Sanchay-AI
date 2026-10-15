@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Automated Stock Redistribution Engine &mdash; {{ shop.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div style="display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <span class="badge" style="background: rgba(45, 212, 160, 0.15); color: var(--color-primary); border: 1px solid rgba(45, 212, 160, 0.35); font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 999px;">
+                AI Optimization &bull; Module F
+            </span>
+            <span style="font-size: 0.85rem; color: var(--color-text-muted);">Multi-Store Inventory Balancing</span>
+        </div>
+        <h1 class="page-title">Automated Stock Redistribution Engine &mdash; {{ shop.name }}</h1>
+        <p class="page-subtitle">
+            Pairs your surplus inventory batches with sister shops facing stockouts or high replenishment deficits, balancing Haversine transit costs against gross margins.
+        </p>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('transfers.shop_transfers_list', shop_id=shop.id) }}" class="btn btn-outline btn-sm">All Active Transfers</a>
+        <a href="{{ url_for('transfers.new_transfer_form', shop_id=shop.id) }}" class="btn btn-primary btn-sm">+ Manual Transfer</a>
+    </div>
+</div>
+
+<!-- Controls & Sensitivity Filter -->
+<form method="GET" action="{{ url_for('transfers.shop_redistribution_recommendations_page', shop_id=shop.id) }}" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1.5rem; padding: 1rem; background: var(--color-surface-elevated); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+    <div>
+        <label for="max_dist" style="display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.3rem;">Max Logistics Radius (Road Distance):</label>
+        <select name="max_dist" id="max_dist" class="form-control" style="min-width: 180px;">
+            <option value="25" {% if max_dist == 25 %}selected{% endif %}>Within 25 km (Local Metro)</option>
+            <option value="50" {% if max_dist == 50 %}selected{% endif %}>Within 50 km (Suburban)</option>
+            <option value="100" {% if max_dist == 100 %}selected{% endif %}>Within 100 km (Regional Default)</option>
+            <option value="250" {% if max_dist == 250 %}selected{% endif %}>Within 250 km (Inter-City)</option>
+        </select>
+    </div>
+    <div>
+        <button type="submit" class="btn btn-primary btn-sm">Re-optimize Network Routes</button>
+    </div>
+</form>
+
+<!-- Summary KPI Grid -->
+{% set total_salvage = recommendations | map(attribute='net_salvage_profit') | sum %}
+{% set critical_count = recommendations | selectattr('priority', 'equalto', 'CRITICAL') | list | length %}
+{% set high_count = recommendations | selectattr('priority', 'equalto', 'HIGH') | list | length %}
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+    <div class="card" style="margin: 0; border-top: 3px solid var(--color-primary);">
+        <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Identified Redistribution Matches</span>
+        <strong style="font-size: 1.45rem; color: var(--color-primary);">{{ recommendations | length }}</strong>
+        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+            Across active network sister shops
+        </span>
+    </div>
+
+    <div class="card" style="margin: 0; border-top: 3px solid var(--color-primary);">
+        <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Net Network Salvage Value</span>
+        <strong style="font-size: 1.45rem; color: var(--color-primary);">&#8377;{{ '{:,.2f}'.format(total_salvage) }}</strong>
+        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+            After deducting estimated transit costs
+        </span>
+    </div>
+
+    <div class="card" style="margin: 0; border-top: 3px solid var(--color-danger);">
+        <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Urgent Actions Needed</span>
+        <strong style="font-size: 1.45rem; color: var(--color-danger);">{{ critical_count + high_count }}</strong>
+        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+            {{ critical_count }} Stockouts &bull; {{ high_count }} Expiring soon
+        </span>
+    </div>
+
+    <div class="card" style="margin: 0; border-top: 3px solid var(--color-info);">
+        <span style="font-size: 0.8rem; color: var(--color-text-muted); display: block;">Safety &amp; Compliance Rule</span>
+        <strong style="font-size: 1.1rem; color: var(--color-text);">Dual Human Approval</strong>
+        <span style="font-size: 0.78rem; color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+            Zero autonomous stock mutations (BR-008)
+        </span>
+    </div>
+</div>
+
+<!-- Recommendations List -->
+<section class="card">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">Recommended Stock Redistribution Proposals</h2>
+            <p class="card-subtitle">
+                Ranked by net profit recovery. Review proposed transfer quantities and initiate with one click.
+            </p>
+        </div>
+    </div>
+
+    {% if recommendations %}
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Priority</th>
+                    <th>Product &amp; Batch</th>
+                    <th>Source Shop</th>
+                    <th>Destination Sister Shop</th>
+                    <th>Transfer Qty</th>
+                    <th>Transit Dist. &amp; Cost</th>
+                    <th>Net Salvage Profit</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in recommendations %}
+                <tr>
+                    <td>
+                        {% if r.priority == 'CRITICAL' %}
+                            <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--color-danger); font-weight: 700;">CRITICAL (Stockout)</span>
+                        {% elif r.priority == 'HIGH' %}
+                            <span class="badge" style="background: rgba(245, 181, 68, 0.15); color: var(--color-secondary); font-weight: 700;">HIGH (Near Expiry)</span>
+                        {% elif r.priority == 'MEDIUM' %}
+                            <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: var(--color-info); font-weight: 600;">MEDIUM</span>
+                        {% else %}
+                            <span class="badge" style="background: var(--color-surface-elevated); color: var(--color-text-muted);">LOW</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ r.product_name }}</strong><br>
+                        <code style="font-size: 0.75rem;">{{ r.sku }}</code> &bull;
+                        <span style="font-size: 0.78rem; color: var(--color-text-muted);">Batch: <code>{{ r.batch_code }}</code> ({{ r.days_to_expiry }}d left)</span>
+                    </td>
+                    <td>
+                        <strong>{{ r.source_shop_name }}</strong><br>
+                        <span style="font-size: 0.78rem; color: var(--color-text-muted);">Avail: {{ r.source_available_qty }} {{ r.unit }}</span>
+                    </td>
+                    <td>
+                        <strong>{{ r.recipient_shop_name }}</strong><br>
+                        <span style="font-size: 0.78rem; color: var(--color-text-muted);">
+                            Current Stock: {{ r.recipient_current_stock }} / Min: {{ r.recipient_low_stock_threshold }}
+                        </span>
+                    </td>
+                    <td>
+                        <strong style="color: var(--color-primary); font-size: 1.1rem;">{{ r.recommended_transfer_qty }} {{ r.unit }}</strong>
+                    </td>
+                    <td>
+                        <div>{{ r.distance_km }} km</div>
+                        <span style="font-size: 0.78rem; color: var(--color-text-muted);">&#8377;{{ '{:,.2f}'.format(r.estimated_transport_cost) }} est.</span>
+                    </td>
+                    <td>
+                        <strong style="color: var(--color-primary); font-size: 1.15rem;">
+                            &#8377;{{ '{:,.2f}'.format(r.net_salvage_profit) }}
+                        </strong>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('transfers.new_transfer_form', shop_id=r.source_shop_id, recipient_shop_id=r.recipient_shop_id, batch_id=r.source_batch_id, quantity=r.recommended_transfer_qty) }}"
+                           class="btn btn-primary btn-sm"
+                           style="white-space: nowrap;">
+                            Convert to Proposal &rarr;
+                        </a>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="8" style="background: rgba(248, 250, 252, 0.6); padding: 0.45rem 1rem; font-size: 0.82rem; color: var(--color-text-muted); border-bottom: 2px solid var(--color-border);">
+                        <strong>Rationale:</strong> {{ r.rationale }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding: 3rem; text-align: center;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--color-primary); margin-bottom: 0.75rem;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="m9 12 2 2 4-4"></path>
+        </svg>
+        <h4 style="margin: 0 0 0.35rem 0; color: var(--color-text);">Network Inventory is Fully Balanced</h4>
+        <p style="margin: 0; color: var(--color-text-muted); font-size: 0.9rem;">
+            No sister shops currently have replenishment deficits or stockout risks that match surplus stock within {{ max_dist }} km.
+        </p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

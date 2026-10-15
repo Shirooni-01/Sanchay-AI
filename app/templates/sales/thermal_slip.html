@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thermal Receipt &mdash; {{ sale.invoice_number }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background: #f1f5f9;
+            color: #000;
+            font-size: 13px;
+            line-height: 1.35;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .toolbar {
+            background: #1e293b;
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-family: system-ui, -apple-system, sans-serif;
+            font-size: 14px;
+        }
+        .toolbar button, .toolbar a {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .toolbar button.secondary, .toolbar a.secondary {
+            background: #475569;
+        }
+        .receipt-container {
+            background: #fff;
+            width: {% if width == '58' %}58mm{% else %}80mm{% endif %};
+            min-height: 100mm;
+            padding: 14px 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            border-radius: 2px;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .bold { font-weight: bold; }
+        .divider {
+            border-top: 1px dashed #000;
+            margin: 8px 0;
+        }
+        .double-divider {
+            border-top: 2px dashed #000;
+            margin: 8px 0;
+        }
+        .store-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .meta-line {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin: 2px 0;
+        }
+        .item-row {
+            margin: 4px 0;
+        }
+        .item-main {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+        }
+        .item-sub {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #333;
+        }
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+        .grand-total {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 6px 0;
+        }
+        .barcode-box {
+            text-align: center;
+            margin: 12px 0 6px 0;
+            letter-spacing: 3px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        @media print {
+            body {
+                background: #fff;
+                padding: 0;
+            }
+            .toolbar {
+                display: none !important;
+            }
+            .receipt-container {
+                width: 100%;
+                box-shadow: none;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <span>Thermal POS Slip ({{ width }}mm)</span>
+    <button onclick="window.print()">&#128438; Print Slip</button>
+    {% if width == '58' %}
+        <a href="?width=80" class="secondary">Switch to 80mm</a>
+    {% else %}
+        <a href="?width=58" class="secondary">Switch to 58mm</a>
+    {% endif %}
+    <a href="{{ url_for('sales.sale_detail_page', shop_id=shop.id, sale_id=sale.id) }}" class="secondary">Back to Invoice</a>
+</div>
+
+<div class="receipt-container">
+    <div class="text-center">
+        <div class="store-title">{{ shop.name }}</div>
+        <div>{{ shop.address }}</div>
+        <div>{{ shop.city }} &mdash; {{ shop.pincode }}</div>
+        {% if shop.contact_phone %}<div>Tel: {{ shop.contact_phone }}</div>{% endif %}
+        <div>Shop Code: {{ shop.code }}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="meta-line">
+        <span>Receipt #:</span>
+        <span class="bold">{{ sale.invoice_number }}</span>
+    </div>
+    <div class="meta-line">
+        <span>Date:</span>
+        <span>{{ sale.created_at[:16].replace('T', ' ') if sale.created_at else '' }}</span>
+    </div>
+    <div class="meta-line">
+        <span>Cashier:</span>
+        <span>{{ sale.sold_by_name or 'Cashier' }}</span>
+    </div>
+    {% if sale.customer_name %}
+    <div class="meta-line">
+        <span>Customer:</span>
+        <span>{{ sale.customer_name }}</span>
+    </div>
+    {% endif %}
+    <div class="meta-line">
+        <span>Payment:</span>
+        <span class="bold">{{ sale.payment_mode }}</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="meta-line bold">
+        <span>ITEM</span>
+        <span>AMOUNT</span>
+    </div>
+
+    <div class="divider"></div>
+
+    {% for item in sale.allocations %}
+    <div class="item-row">
+        <div class="item-main">
+            <span>{{ item.product_name }}</span>
+            <span>&#8377;{{ "%.2f"|format(item.line_total) }}</span>
+        </div>
+        <div class="item-sub">
+            <span>{{ item.quantity }} {{ item.unit }} @ &#8377;{{ "%.2f"|format(item.unit_selling_price) }}</span>
+            <span>B:{{ item.batch_code }}</span>
+        </div>
+        {% if item.line_discount > 0 %}
+        <div class="item-sub">
+            <span>Discount: -&#8377;{{ "%.2f"|format(item.line_discount) }}</span>
+            <span></span>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="double-divider"></div>
+
+    <div class="totals-row">
+        <span>Subtotal:</span>
+        <span>&#8377;{{ "%.2f"|format(sale.subtotal_amount) }}</span>
+    </div>
+    {% if sale.discount_amount > 0 %}
+    <div class="totals-row">
+        <span>Bill Discount:</span>
+        <span>-&#8377;{{ "%.2f"|format(sale.discount_amount) }}</span>
+    </div>
+    {% endif %}
+
+    <div class="divider"></div>
+
+    <div class="totals-row grand-total">
+        <span>TOTAL PAYABLE:</span>
+        <span>&#8377;{{ "%.2f"|format(sale.total_amount) }}</span>
+    </div>
+
+    {% if sale.returned_amount > 0 %}
+    <div class="totals-row">
+        <span>Refunded Amount:</span>
+        <span>-&#8377;{{ "%.2f"|format(sale.returned_amount) }}</span>
+    </div>
+    <div class="totals-row bold">
+        <span>NET PAID:</span>
+        <span>&#8377;{{ "%.2f"|format(sale.net_revenue_amount) }}</span>
+    </div>
+    {% endif %}
+
+    <div class="double-divider"></div>
+
+    <div class="barcode-box">
+        *{{ sale.invoice_number }}*
+    </div>
+
+    <div class="text-center" style="font-size: 11px; margin-top: 8px;">
+        <div>Thank you for shopping with us!</div>
+        <div>Please retain this slip for returns within 7 days.</div>
+        <div>Powered by Sanchay AI POS</div>
+    </div>
+</div>
+
+{% if autoprint %}
+<script>
+    window.addEventListener('load', function() {
+        window.print();
+    });
+</script>
+{% endif %}
+
+</body>
+</html>
