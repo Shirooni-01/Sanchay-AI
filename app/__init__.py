@@ -172,19 +172,28 @@ def _auto_bootstrap_database(app: Flask) -> None:
     if os.getenv("RENDER") or os.getenv("AUTO_SEED_DEMO", "true").lower() in ("1", "true", "yes"):
         try:
             with app.app_context():
-                from flask_migrate import upgrade
+                # Ensure all tables exist in PostgreSQL
+                db.create_all()
+
+                # Attempt Alembic migrations if configured
+                try:
+                    from flask_migrate import upgrade
+                    upgrade()
+                except Exception as alembic_err:
+                    app.logger.info(f"Alembic auto-upgrade notice: {alembic_err}")
+
+                # If no admin exists or admin/shop needs seeding, seed demo dataset
                 from app.models.user import User
+                from scripts.seed_demo_data import seed_all
 
-                # Apply pending schema migrations
-                upgrade()
-
-                # If no admin exists, seed default demo dataset
-                if not User.query.filter_by(username="admin").first():
-                    from scripts.seed_demo_data import seed_all
-                    seed_all()
-                    app.logger.info("Auto-bootstrap: Database upgraded and demo data seeded successfully.")
+                admin = User.query.filter_by(username="admin").first()
+                if not admin:
+                    counts = seed_all()
+                    app.logger.info(f"Auto-bootstrap: Demo data seeded successfully: {counts}")
+                else:
+                    app.logger.info("Auto-bootstrap: Database tables and admin account already exist.")
         except Exception as exc:
-            app.logger.warning(f"Auto-bootstrap skipped or encountered error: {exc}")
+            app.logger.warning(f"Auto-bootstrap encountered an error: {exc}")
 
 
 

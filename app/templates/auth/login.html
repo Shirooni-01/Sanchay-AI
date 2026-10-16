@@ -116,6 +116,13 @@
                 </button>
             </div>
         </form>
+
+        <div style="margin-top: 1.25rem; text-align: center; font-size: 0.8rem; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); padding-top: 0.85rem;">
+            First time on this deployment or need demo reset?
+            <a href="{{ url_for('auth.manual_bootstrap') }}" style="color: var(--color-primary); font-weight: 500; text-decoration: underline; margin-left: 0.25rem;">
+                Initialize / Reset Demo Data
+            </a>
+        </div>
     </div>
 </section>
 

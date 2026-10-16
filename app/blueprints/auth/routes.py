@@ -166,6 +166,23 @@ def login_page():
     )
 
 
+@auth_bp.route("/auth/bootstrap", methods=["GET", "POST"])
+def manual_bootstrap():
+    """Manual one-click bootstrap for free-tier deployments without shell access."""
+    try:
+        db.create_all()
+        from scripts.seed_demo_data import seed_all
+
+        counts = seed_all()
+        flash(
+            f"Database initialized! Demo accounts ready: admin / orga (Organization) & shop / 12345 (Shop). ({counts.get('users', 0)} users, {counts.get('products', 0)} products)",
+            "success",
+        )
+    except Exception as exc:
+        flash(f"Bootstrap encountered an issue: {exc}", "error")
+    return redirect(url_for("auth.login_page"))
+
+
 @auth_bp.route("/auth/logout", methods=["POST"])
 @login_required
 def logout_action():
