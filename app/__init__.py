@@ -159,7 +159,33 @@ def create_app(
     _register_security_hooks(app)
     register_cli_commands(app)
 
+    _auto_bootstrap_database(app)
+
     return app
+
+
+def _auto_bootstrap_database(app: Flask) -> None:
+    """Auto-migrate and seed demo data on platforms like Render where shell access is unavailable."""
+    if app.config.get("TESTING"):
+        return
+
+    if os.getenv("RENDER") or os.getenv("AUTO_SEED_DEMO", "true").lower() in ("1", "true", "yes"):
+        try:
+            with app.app_context():
+                from flask_migrate import upgrade
+                from app.models.user import User
+
+                # Apply pending schema migrations
+                upgrade()
+
+                # If no admin exists, seed default demo dataset
+                if not User.query.filter_by(username="admin").first():
+                    from scripts.seed_demo_data import seed_all
+                    seed_all()
+                    app.logger.info("Auto-bootstrap: Database upgraded and demo data seeded successfully.")
+        except Exception as exc:
+            app.logger.warning(f"Auto-bootstrap skipped or encountered error: {exc}")
+
 
 
 def __getattr__(name: str) -> Any:
