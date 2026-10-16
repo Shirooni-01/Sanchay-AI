@@ -52,12 +52,14 @@ def validate_postgresql_uri(uri: str | None, env_var_name: str = "DATABASE_URL")
     if lower.startswith("postgres://"):
         cleaned = "postgresql+psycopg2://" + cleaned[len("postgres://") :]
         lower = cleaned.lower()
+    elif lower.startswith("postgresql+psycopg://"):
+        cleaned = "postgresql+psycopg2://" + cleaned[len("postgresql+psycopg://") :]
+        lower = cleaned.lower()
+    elif lower.startswith("postgresql://"):
+        cleaned = "postgresql+psycopg2://" + cleaned[len("postgresql://") :]
+        lower = cleaned.lower()
 
-    if not (
-        lower.startswith("postgresql://")
-        or lower.startswith("postgresql+psycopg2://")
-        or lower.startswith("postgresql+psycopg://")
-    ):
+    if not lower.startswith("postgresql+psycopg2://"):
         raise RuntimeError(
             f"Invalid database URI scheme in '{env_var_name}'. "
             "Expected a PostgreSQL URI starting with 'postgresql://' or 'postgresql+psycopg2://'."
