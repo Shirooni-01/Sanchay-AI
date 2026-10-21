@@ -6,6 +6,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.2.0] — 2026-10-21 (Carbon Credits & Sustainability Impact System)
+
+### Added & Enhanced
+- **Comprehensive Multi-Category Food Emission Registry:**
+  - Designed and implemented `EmissionFactor` model ([`app/models/sustainability.py`](file:///c:/omkar/Sanchay%20AI/app/models/sustainability.py)) supporting all 14 food categories: Fruits, Vegetables, Grains and cereals, Rice and wheat, Pulses and legumes, Dairy products, Bakery products, Meat and poultry, Seafood, Packaged foods, Beverages, Frozen foods, Ready-to-eat meals, and Other food products.
+  - Authored extensible reference seed dataset ([`scripts/seed_emission_factors.py`](file:///c:/omkar/Sanchay%20AI/scripts/seed_emission_factors.py)) providing 24 defensible, traceable emission factors derived from published FAO, Poore & Nemecek (2018 Science), and EPA WARM lifecycle benchmarks.
+  - Extensible architecture allowing addition of new products and categories via database records without changing calculation logic.
+- **Scientific Environmental Impact Calculation Engine:**
+  - Implemented `SustainabilityService` ([`app/services/sustainability_service.py`](file:///c:/omkar/Sanchay%20AI/app/services/sustainability_service.py)) with strict conceptual separation between:
+    1. Estimated Net Avoided Emissions ($\text{kg CO}_2\text{e}$).
+    2. Smart Vendor Sustainability Points (configurable 10 pts per $1\text{ kg CO}_2\text{e}$ net positive benefit).
+    3. Official Carbon Credits (1 credit = $1{,}000\text{ kg CO}_2\text{e}$ non-tradable internal estimate).
+  - Robust 5-tier emission factor resolution: Exact product name $\to$ Substring keyword match $\to$ Subcategory fallback $\to$ Category fallback $\to$ In-memory seed fallback $\to$ `PENDING` status.
+  - Unit normalizer converting grams, kilograms, millilitres, litres, and discrete pieces (using defensible per-item piece weights: apples 180g, eggs 50g, bread 450g, etc.) with high-precision Decimal arithmetic.
+- **Rigorous Eligibility & Transport Deduction Rules:**
+  - Stock transfers are not assumed to prevent waste automatically. Transfers must reach `COMPLETED` status with unexpired batches, positive verified received quantity, and valid origin/destination shops.
+  - Attributable transport emissions calculation using inter-store Haversine distance, default road freight emission factor ($0.21\text{ kg CO}_2\text{e/km}$ for light commercial vehicles), and refrigerated cold-chain multiplier ($+18\%$ for dairy, meat, seafood, frozen, ready-to-eat).
+  - Non-negativity guard: If additional transport emissions exceed avoided emissions ($\text{Net} \le 0$), 0 sustainability points are awarded and the event is recorded as `INELIGIBLE`.
+- **Fair 50/50 Multi-Store Attribution & Reversible Audit Ledger:**
+  - Fair 50/50 split of net avoided emissions and sustainability points between the origin/sending store (salvaging at-risk inventory) and destination/receiving store (re-routing to active demand without new production).
+  - Append-only transactional audit trail in `SustainabilityLedger` with unique event constraints preventing duplicate point awards.
+  - Full Super Admin reversal capability (`POST /api/v1/sustainability/reversals/<event_id>`) generating offsetting ledger entries (`IS_REVERSED`) without rewriting historical records.
+- **Automated Workflow Hook into Stock Transfers:**
+  - Integrated `SustainabilityService.process_transfer_sustainability_event` directly into `TransferService.complete_transfer` ([`app/services/transfer_service.py`](file:///c:/omkar/Sanchay%20AI/app/services/transfer_service.py)) on physical delivery and batch receipt.
+- **RESTful API & Scoped RBAC:**
+  - Registered `sustainability_bp` under `/api/v1/sustainability/` ([`app/blueprints/sustainability/routes.py`](file:///c:/omkar/Sanchay%20AI/app/blueprints/sustainability/routes.py)):
+    - `GET /api/v1/sustainability/dashboard` — High-level organization or store KPI metrics.
+    - `GET /api/v1/sustainability/leaderboard` — Store sustainability rankings with net emissions, points, and event counts.
+    - `GET /api/v1/sustainability/history` — Paginated and filtered event ledger.
+    - `GET /api/v1/sustainability/breakdown` — Category-wise environmental impact distribution.
+    - `GET /api/v1/sustainability/factors` — Reference emission factor registry.
+    - `GET /api/v1/sustainability/events/<id>` — Detailed calculation trace for auditability.
+    - `POST /api/v1/sustainability/process-transfer/<id>` — Manual transfer evaluation trigger.
+    - `POST /api/v1/sustainability/reversals/<id>` — Super Admin reversal and adjustment endpoint.
+  - Strict tenant isolation using `@verify_organization_access` and `@verify_shop_access`.
+- **Interactive Sustainability Web Dashboard:**
+  - Responsive Jinja2 dashboard ([`app/templates/sustainability/dashboard.html`](file:///c:/omkar/Sanchay%20AI/app/templates/sustainability/dashboard.html)) adhering strictly to Sanchay AI dark/emerald design tokens:
+    - 5 Real-time KPI summary cards (Net Avoided Emissions, Sustainability Points, Food Saved, Active Stores, Equivalent Official Credits).
+    - Sustainability Leaderboard table with rank badges, store metrics, and progress visualization.
+    - Category Impact progress bars.
+    - Complete Sustainability Audit Event Ledger with confidence badges and interactive calculation trace modal.
+    - Factor Registry view with source citations, uncertainty ranges, and methodology version disclosures.
+  - Added primary navigation links in [`app/templates/base.html`](file:///c:/omkar/Sanchay%20AI/app/templates/base.html) with custom Leaf/Eco SVG icon for both `SUPER_ADMIN` and `SHOP_OWNER`.
+- **Alembic Database Migration:**
+  - Created migration `0008_carbon_credits_and_sustainability.py` ([`migrations/versions/0008_carbon_credits_and_sustainability.py`](file:///c:/omkar/Sanchay%20AI/migrations/versions/0008_carbon_credits_and_sustainability.py)) adding `emission_factors`, `sustainability_events`, and `sustainability_ledger` with proper foreign keys, indices, and check constraints.
+- **Automated Test Suite & Documentation:**
+  - Implemented 42 automated tests in [`tests/test_sustainability_carbon_credits.py`](file:///c:/omkar/Sanchay%20AI/tests/test_sustainability_carbon_credits.py) covering all 20 specification criteria, Section 5 Apple calculation ($12\text{ kg} \times 0.8 - 1.5 = 8.1\text{ kg CO}_2\text{e} \to 81\text{ pts}$), unit conversions, cold-chain transport, multi-store splits, reversals, and REST APIs. **100% pass rate (42 passed in 0.18s)**.
+  - Authored comprehensive scientific methodology document [`docs/SUSTAINABILITY_METHODOLOGY.md`](file:///c:/omkar/Sanchay%20AI/docs/SUSTAINABILITY_METHODOLOGY.md).
+  - Updated [`DATABASE_SCHEMA.md`](file:///c:/omkar/Sanchay%20AI/DATABASE_SCHEMA.md) (Section 2.13) and [`API_SPECIFICATION.md`](file:///c:/omkar/Sanchay%20AI/API_SPECIFICATION.md) (Module H).
+
+---
+
 ## [1.1.0] — 2026-10-15 (Strict 2-Role RBAC, AI Demand Forecasting, Waste Mitigation, Offline POS Sync, Invoicing & Stock Redistribution)
 
 ### Added & Enhanced

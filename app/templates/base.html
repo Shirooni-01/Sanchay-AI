@@ -42,6 +42,7 @@
                     <a href="{{ url_for('admin.dashboard_page') }}" class="nav-link {% if request.path.startswith('/dashboard') %}active{% endif %}">Dashboard</a>
                     <a href="{{ url_for('admin.shops_page') }}" class="nav-link {% if request.path == '/shops' or ('/shops/' in request.path and not '/pos' in request.path and not '/transfers' in request.path and not '/inventory' in request.path and not '/analysis' in request.path and not '/sales' in request.path) %}active{% endif %}">Shops</a>
                     <a href="{{ url_for('catalog.catalog_Entry_redirect') }}" class="nav-link {% if '/products' in request.path or request.path.startswith('/catalog') %}active{% endif %}">Catalog</a>
+                    <a href="{{ url_for('sustainability.dashboard_page') }}" class="nav-link {% if request.path.startswith('/sustainability') or request.path.startswith('/carbon-credits') %}active{% endif %}">Carbon Credits &amp; Impact</a>
                     <a href="{{ url_for('reports.reports_page') }}" class="nav-link {% if request.path.startswith('/reports') or request.path.startswith('/analytics') %}active{% endif %}">Reports</a>
                     <a href="{{ url_for('admin.organization_page') }}" class="nav-link {% if request.path.startswith('/organization') %}active{% endif %}">Organization</a>
                     <a href="{{ url_for('admin.users_page') }}" class="nav-link {% if request.path.startswith('/users') %}active{% endif %}">Personnel &amp; Roles</a>
@@ -56,6 +57,7 @@
                         Product Analysis <span class="badge-ai-nav">AI</span>
                     </a>
                     <a href="{{ url_for('transfers.transfers_hub_redirect') }}" class="nav-link {% if '/transfers' in request.path %}active{% endif %}">Transfers</a>
+                    <a href="{{ url_for('sustainability.dashboard_page') }}" class="nav-link {% if request.path.startswith('/sustainability') or request.path.startswith('/carbon-credits') %}active{% endif %}">Carbon Credits</a>
                     <a href="{{ url_for('reports.reports_page') }}" class="nav-link {% if request.path.startswith('/reports') or request.path.startswith('/analytics') %}active{% endif %}">Reports</a>
                     {% endif %}
                 </nav>

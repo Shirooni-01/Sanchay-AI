@@ -363,3 +363,18 @@ All Phase 5 endpoints accept optional query parameters: `lookback_days` (`1..365
 | **API-041** | `POST /api/v1/ai/train-and-evaluate` | `SUPER_ADMIN` | Trigger forecasting model training & backtest evaluation against baseline (`FR-061`). |
 | **API-041b** | `GET /api/v1/shops/{shop_id}/products/{product_id}/forecast` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Retrieve Ridge regression predictive demand forecast (7/14/30d), confidence intervals, and Poisson survival curves. |
 | **API-042** | `GET /api/v1/ai/shops/{shop_id}/recommendations` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Retrieve demand forecasts, batch expiry-risk scores, and explainable transfer recommendations (`FR-062` to `FR-065`). |
+
+---
+
+### Module H: Carbon Credits & Sustainability APIs (Implemented & Verified)
+
+| ID | Method & Route | Allowed Roles | Description | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **API-043** | `GET /api/v1/sustainability/dashboard` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Summary KPI cards: lifetime points, net kg CO2e avoided, monthly impact, verified event count, pending calculations. | **Implemented** |
+| **API-044** | `GET /api/v1/sustainability/leaderboard` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Multi-shop organization sustainability ranking table with pagination, shop code, points, net CO2e, and contribution %. | **Implemented** |
+| **API-045** | `GET /api/v1/sustainability/history` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Paginated sustainability event history with filters by date, status (`FINALIZED`, `PENDING_REVIEW`, `REVERSED`), and food category. | **Implemented** |
+| **API-046** | `GET /api/v1/sustainability/breakdown` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Category-level environmental impact breakdown with total kg prevented, net kg CO2e, points, and percentage share. | **Implemented** |
+| **API-047** | `GET /api/v1/sustainability/events/{id}` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Granular event calculation trace, resolved emission factor, uncertainty range, and store ledger attributions. | **Implemented** |
+| **API-048** | `GET /api/v1/sustainability/factors` | Any Authenticated | Active reference emission factors registry covering all 14 food categories, units, scopes, and citations. | **Implemented** |
+| **API-049** | `POST /api/v1/sustainability/process-transfer/{id}` | `SUPER_ADMIN`, Assigned `SHOP_OWNER` | Idempotently evaluate completed transfer for waste-prevention credits and post fair 50/50 store allocations. | **Implemented** |
+| **API-050** | `POST /api/v1/sustainability/reversals/{id}` | `SUPER_ADMIN` | Post auditable offsetting negative ledger transactions to reverse a disputed or cancelled sustainability event. | **Implemented** |

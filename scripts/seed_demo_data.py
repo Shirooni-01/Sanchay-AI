@@ -8,6 +8,7 @@ Populates a realistic demo scenario:
 - 6 Catalog Products with ShopProduct pricing
 - Active FEFO inventory batches with varying expiry horizons
 - Realistic historical sales and stock movements
+- Verified Emission Factors & Sample Sustainability Transfer Event
 =============================================================================
 """
 
@@ -22,6 +23,7 @@ from app.models.catalog import Product, ShopProduct
 from app.models.inventory import InventoryBatch, StockMovement
 from app.models.organization import Organization, Shop, UserShopAssignment
 from app.models.sales import Sale, SaleItem
+from app.models.transfer import TransferRequest
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -176,12 +178,12 @@ def seed_all() -> dict[str, int]:
 
     # 6. Catalog Products
     products_spec = [
-        ("SKU-DAIRY-PANEER-200G", "Fresh Malai Paneer (200g)", "Dairy", "pack", Decimal("72.00"), Decimal("95.00"), True),
-        ("SKU-DAIRY-GREEK-YOGURT", "Probiotic Greek Yogurt (400g)", "Dairy", "pcs", Decimal("65.00"), Decimal("90.00"), True),
-        ("SKU-BAKERY-MULTIGRAIN", "Multigrain Sandwich Loaf (400g)", "Bakery", "pack", Decimal("42.00"), Decimal("60.00"), True),
+        ("SKU-DAIRY-PANEER-200G", "Fresh Malai Paneer (200g)", "Dairy products", "pack", Decimal("72.00"), Decimal("95.00"), True),
+        ("SKU-DAIRY-GREEK-YOGURT", "Probiotic Greek Yogurt (400g)", "Dairy products", "pcs", Decimal("65.00"), Decimal("90.00"), True),
+        ("SKU-BAKERY-MULTIGRAIN", "Multigrain Sandwich Loaf (400g)", "Bakery products", "pack", Decimal("42.00"), Decimal("60.00"), True),
         ("SKU-BEV-COLD-COFFEE", "Arabica Cold Brew Bottle (250ml)", "Beverages", "pcs", Decimal("55.00"), Decimal("80.00"), True),
         ("SKU-BEV-ALMOND-MILK-1L", "Unsweetened Almond Milk (1L)", "Beverages", "litre", Decimal("190.00"), Decimal("250.00"), True),
-        ("SKU-STAPLE-BASMATI-5KG", "Royal Aged Basmati Rice (5kg)", "Staples", "pack", Decimal("420.00"), Decimal("550.00"), False),
+        ("SKU-STAPLE-BASMATI-5KG", "Royal Aged Basmati Rice (5kg)", "Rice and wheat", "pack", Decimal("420.00"), Decimal("550.00"), False),
     ]
 
     today = date.today()
@@ -322,6 +324,47 @@ def seed_all() -> dict[str, int]:
         db.session.add(item_1)
 
     db.session.commit()
+
+    # 9. Reference Emission Factors & Sample Sustainability Transfer Event
+    from scripts.seed_emission_factors import seed_emission_factors
+    from app.services.sustainability_service import SustainabilityService
+
+    seed_emission_factors()
+
+    if TransferRequest.query.count() == 0:
+        b_paneer = InventoryBatch.query.filter_by(shop_id=shop_1.id, batch_code="B-PNR-101").first()
+        trf = TransferRequest(
+            transfer_code="TRF-20261015-0001",
+            organization_id=org.id,
+            source_shop_id=shop_1.id,
+            recipient_shop_id=shop_2.id,
+            product_id=p_paneer.id,
+            source_batch_id=b_paneer.id,
+            quantity=15,
+            received_good_qty=15,
+            transit_damaged_qty=0,
+            unit_transfer_price=p_paneer.default_purchase_price,
+            estimated_distance_km=Decimal("8.50"),
+            batch_expiry_date_snapshot=date.today() + timedelta(days=6),
+            status="COMPLETED",
+            initiated_by_shop_id=shop_1.id,
+            initiated_by_user_id=owner_1.id,
+            source_approved_by_user_id=owner_1.id,
+            recipient_approved_by_user_id=owner_2.id,
+            dispatched_by_user_id=owner_1.id,
+            received_by_user_id=owner_2.id,
+            offer_expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+            received_at=datetime.now(timezone.utc) - timedelta(hours=3),
+        )
+        db.session.add(trf)
+        db.session.commit()
+
+        try:
+            SustainabilityService.process_transfer_sustainability_event(admin, trf.id)
+            print("Seeded sample sustainability transfer event!")
+        except Exception as err:
+            print(f"Notice: sustainability demo event processing: {err}")
+
     print("Demo dataset seeded successfully!")
 
     counts = {

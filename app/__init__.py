@@ -1,4 +1,4 @@
-"""Flask Application Factory for Sanchay AI (Phase 1: Foundation & Authentication)."""
+"""Flask Application Factory for Sanchay AI."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from app.blueprints.inventory import inventory_bp
 from app.blueprints.notifications import notifications_bp
 from app.blueprints.reports import reports_bp
 from app.blueprints.sales import sales_bp
+from app.blueprints.sustainability import sustainability_bp
 from app.blueprints.transfers import transfers_bp
 from app.cli import register_cli_commands
 from app.config import CONFIG_BY_NAME, validate_app_config
@@ -106,6 +107,8 @@ def _register_security_hooks(app: Flask) -> None:
             or request.path.startswith("/notifications")
             or request.path.startswith("/reports")
             or request.path.startswith("/analytics")
+            or request.path.startswith("/sustainability")
+            or request.path.startswith("/carbon-credits")
             or request.path == "/"
         ):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -155,6 +158,7 @@ def create_app(
     app.register_blueprint(transfers_bp)
     app.register_blueprint(notifications_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(sustainability_bp)
     register_error_handlers(app)
     _register_security_hooks(app)
     register_cli_commands(app)
@@ -185,6 +189,10 @@ def _auto_bootstrap_database(app: Flask) -> None:
                 # If no admin exists or admin/shop needs seeding, seed demo dataset
                 from app.models.user import User
                 from scripts.seed_demo_data import seed_all
+                from scripts.seed_emission_factors import seed_emission_factors
+
+                # Ensure emission factors are populated
+                seed_emission_factors()
 
                 admin = User.query.filter_by(username="admin").first()
                 if not admin:
@@ -194,7 +202,6 @@ def _auto_bootstrap_database(app: Flask) -> None:
                     app.logger.info("Auto-bootstrap: Database tables and admin account already exist.")
         except Exception as exc:
             app.logger.warning(f"Auto-bootstrap encountered an error: {exc}")
-
 
 
 def __getattr__(name: str) -> Any:

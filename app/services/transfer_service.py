@@ -426,6 +426,15 @@ class TransferService:
                 )
 
             db.session.commit()
+
+            # Automatic sustainability credit evaluation
+            try:
+                from app.services.sustainability_service import SustainabilityService
+                SustainabilityService.process_transfer_sustainability_event(actor=actor, transfer_id=transfer.id)
+            except Exception as sust_err:
+                if has_app_context():
+                    current_app.logger.info(f"Sustainability notice: {sust_err}")
+
             return transfer
 
         except DomainError:

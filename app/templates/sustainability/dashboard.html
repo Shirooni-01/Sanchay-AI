@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+
+{% block title %}Carbon Credits &amp; Sustainability &mdash; Smart Vendor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span class="badge" style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; text-transform: uppercase;">
+                GHG Protocol &bull; Scope 3 Avoidance
+            </span>
+            <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem;">
+                Methodology {{ summary.methodology_version }}
+            </span>
+        </div>
+        <h1 class="page-title">Carbon Credits &amp; Sustainability Leaderboard</h1>
+        <p class="page-subtitle">
+            Quantified food waste mitigation, attributable logistics footprint, and fair multi-shop sustainability rewards.
+        </p>
+    </div>
+    <div class="header-actions">
+        {% if user.role == 'SUPER_ADMIN' %}
+            <button type="button" class="btn btn-outline btn-sm" onclick="openFactorsModal()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: text-bottom;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                Emission Factors Registry
+            </button>
+        {% endif %}
+        <a href="{{ url_for('transfers.transfers_hub_redirect') }}" class="btn btn-primary btn-sm">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: text-bottom;">
+                <polyline points="17 1 21 5 17 9"></polyline>
+                <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                <polyline points="7 23 3 19 7 15"></polyline>
+                <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+            </svg>
+            Redistribute Stock
+        </a>
+    </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- Shop Scope Filter Bar                                                   -->
+<!-- ======================================================================= -->
+{% if shops and shops|length > 1 %}
+<section class="card" style="margin-bottom: 1.5rem; padding: 0.75rem 1.25rem;">
+    <form method="GET" action="{{ url_for('sustainability.dashboard_page') }}" class="filter-form" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <label for="scope-shop-select" style="font-weight: 600; font-size: 0.875rem;">Reporting Scope:</label>
+            <select name="shop_id" id="scope-shop-select" class="form-control form-control-sm" style="min-width: 220px;" onchange="this.form.submit()">
+                {% if user.role == 'SUPER_ADMIN' %}
+                    <option value="" {% if not selected_shop_id %}selected{% endif %}>All Shops (Organization Aggregate)</option>
+                {% endif %}
+                {% for s in shops %}
+                    <option value="{{ s.id }}" {% if selected_shop_id == s.id %}selected{% endif %}>
+                        {{ s.name }} ({{ s.code }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--color-text-muted);">
+            Reward Rule: <code style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;">{{ summary.reward_rule_version }}</code>
+        </div>
+    </form>
+</section>
+{% endif %}
+
+<!-- ======================================================================= -->
+<!-- 1. KPI Metric Cards Grid                                                -->
+<!-- ======================================================================= -->
+<section class="stats-grid" style="margin-bottom: 1.5rem;">
+    <!-- Lifetime Sustainability Points -->
+    <div class="stat-card" style="border-top: 3px solid #f59e0b;">
+        <span class="stat-label">Sustainability Points</span>
+        <strong class="stat-value" style="color: #f59e0b; display: flex; align-items: baseline; gap: 6px;">
+            <span>{{ '{:,}'.format(summary.lifetime_sustainability_points) }}</span>
+            <span style="font-size: 0.85rem; font-weight: 500; color: var(--color-text-muted);">pts</span>
+        </strong>
+        <span class="stat-meta">10 points / 1 kg net CO&#8322;e avoided</span>
+    </div>
+
+    <!-- Net Avoided Emissions -->
+    <div class="stat-card" style="border-top: 3px solid #22c55e;">
+        <span class="stat-label">Net Emissions Avoided</span>
+        <strong class="stat-value" style="color: #22c55e;">
+            {{ '{:,.2f}'.format(summary.lifetime_net_impact_kg_co2e) }} <span style="font-size: 0.85rem; font-weight: 500;">kg CO&#8322;e</span>
+        </strong>
+        <span class="stat-meta">
+            &asymp; {{ summary.trees_equivalent_benchmark }} mature tree-years absorbed
+        </span>
+    </div>
+
+    <!-- This Month Impact -->
+    <div class="stat-card" style="border-top: 3px solid #3b82f6;">
+        <span class="stat-label">Impact This Month</span>
+        <strong class="stat-value" style="color: #3b82f6;">
+            {{ '{:,.2f}'.format(summary.month_net_impact_kg_co2e) }} <span style="font-size: 0.85rem; font-weight: 500;">kg CO&#8322;e</span>
+        </strong>
+        <span class="stat-meta">Active billing period</span>
+    </div>
+
+    <!-- Eligible Redistribution Events -->
+    <div class="stat-card" style="border-top: 3px solid #8b5cf6;">
+        <span class="stat-label">Verified Waste Prevention</span>
+        <strong class="stat-value">{{ summary.eligible_redistribution_events }}</strong>
+        <span class="stat-meta">Transfers &amp; salvage sales verified</span>
+    </div>
+
+    <!-- Pending Reviews -->
+    <div class="stat-card" style="border-top: 3px solid {% if summary.pending_calculations_count > 0 %}#f97316{% else %}var(--color-border){% endif %};">
+        <span class="stat-label">Pending Reviews</span>
+        <strong class="stat-value" style="{% if summary.pending_calculations_count > 0 %}color: #f97316;{% endif %}">
+            {{ summary.pending_calculations_count }}
+        </strong>
+        <span class="stat-meta">Awaiting factor or delivery confirmation</span>
+    </div>
+</section>
+
+<!-- ======================================================================= -->
+<!-- 2. Two-Column Grid: Leaderboard & Category Impact                       -->
+<!-- ======================================================================= -->
+<div class="grid-2-col" style="margin-bottom: 1.5rem; gap: 1.5rem;">
+    <!-- Left: Organization Leaderboard -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header card-header-split">
+            <div>
+                <h2 class="card-title" style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    Store Sustainability Leaderboard
+                </h2>
+                <p class="card-subtitle">Sister-shop ranking across the cooperative network</p>
+            </div>
+            <span class="badge" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.25); font-weight: 600; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem;">
+                50/50 Fair Multi-Store Credit
+            </span>
+        </div>
+
+        {% if leaderboard and leaderboard|length > 0 %}
+        <div class="table-responsive">
+            <table class="data-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th style="width: 60px; text-align: center;">Rank</th>
+                        <th>Store Details</th>
+                        <th style="text-align: right;">Net kg CO&#8322;e</th>
+                        <th style="text-align: right;">Points</th>
+                        <th style="text-align: right; width: 90px;">Network Share</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for shop in leaderboard %}
+                    <tr style="{% if shop.is_current_shop %}background: rgba(59, 130, 246, 0.08); font-weight: 600;{% endif %}">
+                        <td style="text-align: center;">
+                            {% if shop.rank == 1 %}
+                                <span style="font-size: 1.1rem;" title="1st Place Champion">&#129351;</span>
+                            {% elif shop.rank == 2 %}
+                                <span style="font-size: 1.1rem;" title="2nd Place">&#129352;</span>
+                            {% elif shop.rank == 3 %}
+                                <span style="font-size: 1.1rem;" title="3rd Place">&#129353;</span>
+                            {% else %}
+                                <span class="badge" style="background: rgba(255,255,255,0.05); font-size: 0.8rem;">#{{ shop.rank }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="font-weight: 600; color: var(--color-text-primary);">
+                                {{ shop.shop_name }}
+                                {% if shop.is_current_shop %}
+                                    <span class="badge" style="background: #3b82f6; color: #fff; font-size: 0.65rem; margin-left: 4px; padding: 1px 5px; border-radius: 3px;">YOUR STORE</span>
+                                {% endif %}
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--color-text-muted);">
+                                {{ shop.shop_code }} &bull; {{ shop.city }}
+                            </div>
+                        </td>
+                        <td style="text-align: right; font-family: monospace; font-size: 0.9rem; color: #22c55e;">
+                            {{ '{:,.2f}'.format(shop.total_impact_kg_co2e) }}
+                        </td>
+                        <td style="text-align: right; font-weight: 700; color: #f59e0b;">
+                            {{ '{:,}'.format(shop.total_points) }}
+                        </td>
+                        <td style="text-align: right;">
+                            <div style="font-size: 0.8rem; font-weight: 600;">{{ shop.organization_contribution_pct }}%</div>
+                            <div style="background: rgba(255,255,255,0.1); height: 4px; border-radius: 2px; overflow: hidden; margin-top: 3px;">
+                                <div style="background: #22c55e; height: 100%; width: {{ shop.organization_contribution_pct }}%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 2.5rem 1rem; color: var(--color-text-muted);">
+            <p style="margin-bottom: 0.5rem; font-size: 1rem;">No store sustainability activity recorded yet.</p>
+            <p style="font-size: 0.85rem;">Complete inter-store stock transfers or near-expiry salvage sales to start earning points.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right: Category Environmental Impact Breakdown -->
+    <div class="card" style="margin-top: 0;">
+        <div class="card-header card-header-split">
+            <div>
+                <h2 class="card-title">Impact by Food Category</h2>
+                <p class="card-subtitle">Verified emission prevention across supported catalog categories</p>
+            </div>
+        </div>
+
+        {% if category_breakdown and category_breakdown|length > 0 %}
+        <div style="padding: 0.5rem 0;">
+            {% for cat in category_breakdown %}
+            <div style="margin-bottom: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                    <div>
+                        <strong style="font-size: 0.9rem; color: var(--color-text-primary);">{{ cat.category }}</strong>
+                        <span style="font-size: 0.75rem; color: var(--color-text-muted); margin-left: 6px;">
+                            ({{ cat.event_count }} events &bull; {{ '{:,.1f}'.format(cat.total_saved_kg) }} kg saved)
+                        </span>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-weight: 600; color: #22c55e; font-size: 0.85rem;">{{ '{:,.2f}'.format(cat.total_net_co2e_kg) }} kg CO&#8322;e</span>
+                        <span style="font-size: 0.75rem; color: #f59e0b; margin-left: 6px;">({{ '{:,}'.format(cat.total_points) }} pts)</span>
+                    </div>
+                </div>
+                <div style="background: rgba(255,255,255,0.08); height: 8px; border-radius: 4px; overflow: hidden;">
+                    <div style="background: linear-gradient(90deg, #22c55e, #10b981); height: 100%; width: {{ cat.share_pct }}%; border-radius: 4px;" title="{{ cat.share_pct }}% of total impact"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 2.5rem 1rem; color: var(--color-text-muted);">
+            <p style="margin-bottom: 0.5rem; font-size: 1rem;">No category breakdown available yet.</p>
+            <p style="font-size: 0.85rem;">Emission factors are ready for all 14 food categories.</p>
+        </div>
+        {% endif %}
+
+        <div style="background: rgba(255,255,255,0.03); border: 1px dashed var(--color-border); border-radius: 6px; padding: 0.75rem 1rem; margin-top: 1rem; font-size: 0.78rem; color: var(--color-text-muted);">
+            <strong>Calculation Notice:</strong> Food items with active refrigeration requirements (Dairy, Meat, Frozen) apply a 1.25&times; cold-chain logistics footprint adjustment.
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- 3. Full-width Section: Waste Prevention & Carbon Event History          -->
+<!-- ======================================================================= -->
+<section class="card" style="margin-top: 1.5rem;">
+    <div class="card-header card-header-split">
+        <div>
+            <h2 class="card-title">Waste Prevention Event History &amp; Ledger</h2>
+            <p class="card-subtitle">Auditable trace of every waste-prevention event, applicable emission factor, and shop attribution</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="exportHistoryCSV()">Export History</button>
+        </div>
+    </div>
+
+    {% if events and events|length > 0 %}
+    <div class="table-responsive">
+        <table class="data-table" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Date &amp; Type</th>
+                    <th>Product &amp; Category</th>
+                    <th style="text-align: right;">Quantity</th>
+                    <th>Route (From &rarr; To)</th>
+                    <th style="text-align: right;">Gross Avoided</th>
+                    <th style="text-align: right;">Transport Cost</th>
+                    <th style="text-align: right;">Net CO&#8322;e</th>
+                    <th style="text-align: right;">Points</th>
+                    <th>Status &amp; Confidence</th>
+                    <th style="text-align: center;">Audit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for evt in events %}
+                <tr>
+                    <td>
+                        <div style="font-weight: 600; font-size: 0.85rem;">{{ evt.created_at[:10] if evt.created_at else 'N/A' }}</div>
+                        <div style="font-size: 0.72rem; color: var(--color-text-muted);">{{ evt.event_type.replace('_', ' ') }}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; color: var(--color-text-primary);">{{ evt.product_name }}</div>
+                        <div style="font-size: 0.72rem; color: var(--color-text-muted);">{{ evt.product_category }}</div>
+                    </td>
+                    <td style="text-align: right;">
+                        <span style="font-weight: 600;">{{ evt.eligible_saved_quantity }}</span> {{ evt.quantity_unit }}
+                        <div style="font-size: 0.72rem; color: var(--color-text-muted);">({{ '{:,.2f}'.format(evt.normalized_weight_kg) }} kg)</div>
+                    </td>
+                    <td>
+                        <div style="font-size: 0.8rem;">
+                            <strong>{{ evt.source_shop_name }}</strong>
+                            {% if evt.destination_shop_name %}
+                                &rarr; {{ evt.destination_shop_name }}
+                            {% else %}
+                                <em>(Local Markdown)</em>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td style="text-align: right; color: var(--color-text-muted); font-size: 0.85rem;">
+                        {{ '{:,.2f}'.format(evt.estimated_avoided_emissions_kg_co2e) }} kg
+                    </td>
+                    <td style="text-align: right; color: #ef4444; font-size: 0.85rem;">
+                        -{{ '{:,.2f}'.format(evt.additional_transport_emissions_kg_co2e) }} kg
+                    </td>
+                    <td style="text-align: right; font-weight: 700; color: {% if evt.net_estimated_impact_kg_co2e > 0 %}#22c55e{% else %}#ef4444{% endif %}; font-size: 0.9rem;">
+                        {{ '{:,.2f}'.format(evt.net_estimated_impact_kg_co2e) }} kg
+                    </td>
+                    <td style="text-align: right; font-weight: 700; color: #f59e0b;">
+                        +{{ evt.reward_points_awarded }}
+                    </td>
+                    <td>
+                        <div>
+                            {% if evt.event_status == 'FINALIZED' %}
+                                <span class="badge" style="background: rgba(34, 197, 94, 0.15); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); font-size: 0.7rem; padding: 2px 6px; border-radius: 3px;">FINALIZED</span>
+                            {% elif evt.event_status == 'PENDING_REVIEW' %}
+                                <span class="badge" style="background: rgba(249, 115, 22, 0.15); color: #f97316; border: 1px solid rgba(249, 115, 22, 0.3); font-size: 0.7rem; padding: 2px 6px; border-radius: 3px;">PENDING</span>
+                            {% elif evt.event_status == 'REVERSED' %}
+                                <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.7rem; padding: 2px 6px; border-radius: 3px;">REVERSED</span>
+                            {% else %}
+                                <span class="badge" style="background: rgba(156, 163, 175, 0.15); color: #9ca3af; font-size: 0.7rem; padding: 2px 6px; border-radius: 3px;">INELIGIBLE</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size: 0.68rem; color: var(--color-text-muted); margin-top: 2px;">
+                            {{ evt.confidence_level.replace('_', ' ') }}
+                        </div>
+                    </td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 0.75rem;" onclick="viewEventDetails({{ evt.id }})">
+                            Details
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 3rem 1rem; color: var(--color-text-muted);">
+        <p style="font-size: 1.05rem; margin-bottom: 0.5rem;">No sustainability history records found.</p>
+        <p style="font-size: 0.85rem; max-width: 500px; margin: 0 auto;">
+            When sister shops complete stock transfers or sell near-expiry surplus items, their verifiable emission reductions and points appear here in real time.
+        </p>
+    </div>
+    {% endif %}
+</section>
+
+<!-- ======================================================================= -->
+<!-- 4. Transparency & Regulatory Methodology Notice                         -->
+<!-- ======================================================================= -->
+<section class="card" style="margin-top: 1.5rem; background: rgba(59, 130, 246, 0.04); border-color: rgba(59, 130, 246, 0.2);">
+    <div style="display: flex; gap: 1rem; align-items: flex-start;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 2px;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <div style="font-size: 0.85rem; line-height: 1.5; color: var(--color-text-muted);">
+            <strong style="color: var(--color-text-primary);">Carbon Accounting &amp; Methodology Standards:</strong>
+            Smart Vendor calculates estimated emissions avoided by measuring food diverted from municipal landfill/open disposal against documented baseline decay factors (FAO Food Wastage Footprint and EPA WARM). Internal sustainability points serve gamification and cooperative performance recognition. They do not constitute officially issued, tradable regulatory carbon offset credits under UNFCCC or voluntary carbon registries (e.g. Verra, Gold Standard) without third-party physical audit and verification.
+        </div>
+    </div>
+</section>
+
+<!-- ======================================================================= -->
+<!-- Modal: Event Details & Methodology Trace                                -->
+<!-- ======================================================================= -->
+<div id="event-modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="card" style="max-width: 650px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative;">
+        <div class="card-header card-header-split">
+            <h3 class="card-title" id="modal-event-title">Calculation Trace &amp; Audit</h3>
+            <button type="button" class="btn btn-outline btn-sm" onclick="closeEventModal()">&times;</button>
+        </div>
+        <div id="modal-event-body" style="padding: 1rem 0;">
+            <p>Loading calculation trace...</p>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 1rem; border-top: 1px solid var(--color-border);">
+            <button type="button" class="btn btn-outline btn-sm" onclick="closeEventModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- ======================================================================= -->
+<!-- Modal: Emission Factors Registry                                        -->
+<!-- ======================================================================= -->
+<div id="factors-modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="card" style="max-width: 850px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative;">
+        <div class="card-header card-header-split">
+            <div>
+                <h3 class="card-title">Reference Emission Factors Registry</h3>
+                <p class="card-subtitle">Documented public benchmarks by food category and logistics scope</p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="closeFactorsModal()">&times;</button>
+        </div>
+        <div id="modal-factors-body" style="padding: 1rem 0;">
+            <p>Loading registered factors...</p>
+        </div>
+        <div style="display: flex; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--color-border);">
+            <button type="button" class="btn btn-outline btn-sm" onclick="closeFactorsModal()">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function viewEventDetails(eventId) {
+    var backdrop = document.getElementById("event-modal-backdrop");
+    var body = document.getElementById("modal-event-body");
+    var title = document.getElementById("modal-event-title");
+    backdrop.style.display = "flex";
+    body.innerHTML = "<p>Loading audit details for event #" + eventId + "...</p>";
+
+    fetch("/api/v1/sustainability/events/" + eventId, {
+        headers: { "Accept": "application/json" }
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(resp) {
+        if (!resp || !resp.success || !resp.data) {
+            body.innerHTML = "<div class='alert alert-danger'>Failed to load event details.</div>";
+            return;
+        }
+        var d = resp.data;
+        title.textContent = "Event #" + d.id + " Calculation Trace: " + (d.product_name || "Food Product");
+
+        var factorInfo = d.applicable_factor_details ? (
+            "<p><strong>Factor Applied:</strong> " + d.applicable_factor_details.factor_value + " kg CO2e/kg (" + d.applicable_factor_details.source_name + ", " + (d.applicable_factor_details.source_year || "N/A") + ")</p>" +
+            "<p><strong>Citation:</strong> <em>" + (d.applicable_factor_details.source_reference || "N/A") + "</em></p>" +
+            "<p><strong>Uncertainty:</strong> &plusmn;" + (d.applicable_factor_details.uncertainty_percent || "15") + "%</p>"
+        ) : "<p><strong>Factor Applied:</strong> Category default benchmark.</p>";
+
+        var ledgersHtml = "";
+        if (d.ledger_attributions && d.ledger_attributions.length > 0) {
+            ledgersHtml = "<h4 style='margin-top: 1rem; margin-bottom: 0.5rem;'>Store Ledger Attribution</h4><ul style='padding-left: 1.25rem;'>";
+            d.ledger_attributions.forEach(function(l) {
+                ledgersHtml += "<li><strong>" + (l.shop_name || "Shop #" + l.shop_id) + ":</strong> +" + l.points_delta + " points (" + l.attributed_impact_kg_co2e + " kg CO2e) &bull; <em>" + (l.notes || "") + "</em></li>";
+            });
+            ledgersHtml += "</ul>";
+        }
+
+        body.innerHTML = [
+            "<div style='font-size: 0.88rem; line-height: 1.6;'>",
+            "<p><strong>Product:</strong> " + (d.product_name || "N/A") + " (" + (d.product_category || "N/A") + ")</p>",
+            "<p><strong>Saved Quantity:</strong> " + d.eligible_saved_quantity + " " + d.quantity_unit + " &rarr; <strong>" + d.normalized_weight_kg + " kg</strong> (Metric normalized)</p>",
+            "<hr style='border: none; border-top: 1px solid var(--color-border); margin: 0.75rem 0;'>",
+            factorInfo,
+            "<hr style='border: none; border-top: 1px solid var(--color-border); margin: 0.75rem 0;'>",
+            "<p><strong>Gross Avoided Emissions:</strong> " + d.estimated_avoided_emissions_kg_co2e + " kg CO2e</p>",
+            "<p><strong>Additional Transport Emissions:</strong> -" + d.additional_transport_emissions_kg_co2e + " kg CO2e</p>",
+            "<p style='font-size: 1rem; color: #22c55e;'><strong>Net Environmental Benefit:</strong> " + d.net_estimated_impact_kg_co2e + " kg CO2e</p>",
+            "<p style='color: #f59e0b;'><strong>Awarded Sustainability Points:</strong> " + d.reward_points_awarded + " pts (" + d.methodology_version + ")</p>",
+            "<p><strong>Confidence Tier:</strong> " + d.confidence_level + " (" + d.factor_selection_tier + ")</p>",
+            "<p><strong>Evidence Notes:</strong> " + (d.evidence_summary || "None") + "</p>",
+            ledgersHtml,
+            "</div>"
+        ].join("");
+    })
+    .catch(function(err) {
+        body.innerHTML = "<div class='alert alert-danger'>Error loading details: " + err + "</div>";
+    });
+}
+
+function closeEventModal() {
+    document.getElementById("event-modal-backdrop").style.display = "none";
+}
+
+function openFactorsModal() {
+    var backdrop = document.getElementById("factors-modal-backdrop");
+    var body = document.getElementById("modal-factors-body");
+    backdrop.style.display = "flex";
+    body.innerHTML = "<p>Loading active reference factors...</p>";
+
+    fetch("/api/v1/sustainability/factors", {
+        headers: { "Accept": "application/json" }
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(resp) {
+        if (!resp || !resp.success || !resp.data) {
+            body.innerHTML = "<div class='alert alert-danger'>Failed to load factors.</div>";
+            return;
+        }
+        var factors = resp.data.factors || [];
+        var html = "<div class='table-responsive'><table class='data-table' style='width: 100%; font-size: 0.8rem;'><thead><tr><th>Category</th><th>Scope</th><th>Factor</th><th>Source &amp; Reference</th><th>Uncertainty</th></tr></thead><tbody>";
+        factors.forEach(function(f) {
+            html += "<tr>" +
+                "<td><strong>" + f.category + "</strong>" + (f.subcategory ? "<div style='color: var(--color-text-muted);'>" + f.subcategory + "</div>" : "") + "</td>" +
+                "<td><span class='badge' style='font-size: 0.65rem;'>" + f.factor_scope + "</span></td>" +
+                "<td style='font-weight: 600; color: #22c55e;'>" + f.factor_value + " " + f.factor_unit + "</td>" +
+                "<td><div>" + f.source_name + " (" + (f.source_year || "N/A") + ")</div><div style='font-size: 0.7rem; color: var(--color-text-muted);'>" + (f.source_reference || "") + "</div></td>" +
+                "<td>&plusmn;" + (f.uncertainty_percent || "15") + "%</td>" +
+            "</tr>";
+        });
+        html += "</tbody></table></div>";
+        body.innerHTML = html;
+    })
+    .catch(function(err) {
+        body.innerHTML = "<div class='alert alert-danger'>Error loading emission factors: " + err + "</div>";
+    });
+}
+
+function closeFactorsModal() {
+    document.getElementById("factors-modal-backdrop").style.display = "none";
+}
+
+function exportHistoryCSV() {
+    var rows = [["Event ID", "Date", "Product", "Category", "Saved Qty", "Unit", "Net kg CO2e", "Points", "Status"]];
+    var tableRows = document.querySelectorAll(".data-table tbody tr");
+    tableRows.forEach(function(tr) {
+        var cols = tr.querySelectorAll("td");
+        if (cols.length >= 8) {
+            rows.push([
+                cols[0].innerText.replace(/\n/g, ' '),
+                cols[1].innerText.replace(/\n/g, ' '),
+                cols[2].innerText.replace(/\n/g, ' '),
+                cols[3].innerText.replace(/\n/g, ' '),
+                cols[4].innerText.replace(/\n/g, ' '),
+                cols[5].innerText.replace(/\n/g, ' '),
+                cols[6].innerText.replace(/\n/g, ' '),
+                cols[7].innerText.replace(/\n/g, ' '),
+                cols[8].innerText.replace(/\n/g, ' ')
+            ]);
+        }
+    });
+
+    var csvContent = "data:text/csv;charset=utf-8," + rows.map(function(e) { return e.map(function(v) { return '"' + (v || '').replace(/"/g, '""') + '"'; }).join(","); }).join("\n");
+    var encodedUri = encodeURI(csvContent);
+    var link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "smart_vendor_sustainability_history.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+</script>
+{% endblock %}

@@ -431,6 +431,82 @@ The following three tables are reserved exclusively for **Phase 8 (AI Inventory 
 
 ---
 
+
+### 2.13 Carbon Accounting & Sustainability Tables (Implemented in Phase C — Migration `0008_carbon_sustainability`)
+
+#### Table: `emission_factors`
+Configurable GHG emission factors covering all food product categories.
+
+| Column | Type | Constraints / Defaults | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `BIGINT` | `PRIMARY KEY GENERATED ALWAYS AS IDENTITY` | Surrogate primary key |
+| `category` | `VARCHAR(80)` | `NOT NULL` | Food category (e.g. Fruits, Vegetables, Dairy products) |
+| `subcategory` | `VARCHAR(80)` | `NULL` | Optional subcategory (e.g. Cultured Dairy, Root Veg) |
+| `product_name_pattern` | `VARCHAR(150)` | `NULL` | Optional regex or keyword pattern |
+| `product_id` | `BIGINT` | `NULL REFERENCES products(id) ON DELETE SET NULL` | Exact product link if applicable |
+| `factor_value` | `NUMERIC(10,4)` | `NOT NULL CHECK (factor_value >= 0)` | Benchmark factor (kg CO2e / unit) |
+| `factor_unit` | `VARCHAR(32)` | `NOT NULL DEFAULT 'kg_co2e_per_kg'` | Measurement unit |
+| `factor_scope` | `VARCHAR(40)` | `NOT NULL DEFAULT 'WASTE_PREVENTION'` | Scope (WASTE_PREVENTION, TRANSPORT_ROAD) |
+| `geographic_scope` | `VARCHAR(32)` | `NOT NULL DEFAULT 'IN'` | Geographic applicability (IN, GLOBAL) |
+| `source_name` | `VARCHAR(150)` | `NOT NULL` | Scientific reference or organization |
+| `source_reference` | `VARCHAR(255)` | `NULL` | Citation / publication details |
+| `source_year` | `INTEGER` | `NULL` | Publication / dataset year |
+| `uncertainty_percent` | `NUMERIC(5,2)` | `NULL DEFAULT 15.00` | Estimated uncertainty range (+/- %) |
+| `methodology_version` | `VARCHAR(32)` | `NOT NULL DEFAULT 'v1.0.0-fao-warm'` | Methodology version |
+| `is_active` | `BOOLEAN` | `NOT NULL DEFAULT TRUE` | Active factor flag |
+| `notes` | `TEXT` | `NULL` | Scope boundaries & documentation notes |
+| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT NOW()` | Creation timestamp |
+| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT NOW()` | Last update timestamp |
+
+#### Table: `sustainability_events`
+Canonical record of verified waste prevention and net emission avoidance calculations.
+
+| Column | Type | Constraints / Defaults | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `BIGINT` | `PRIMARY KEY GENERATED ALWAYS AS IDENTITY` | Surrogate primary key |
+| `organization_id` | `BIGINT` | `NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT` | Owning organization |
+| `source_shop_id` | `BIGINT` | `NOT NULL REFERENCES shops(id) ON DELETE RESTRICT` | Originating / supplying store |
+| `destination_shop_id` | `BIGINT` | `NULL REFERENCES shops(id) ON DELETE RESTRICT` | Receiving store (if transfer) |
+| `product_id` | `BIGINT` | `NOT NULL REFERENCES products(id) ON DELETE RESTRICT` | Food product |
+| `batch_id` | `BIGINT` | `NULL REFERENCES inventory_batches(id) ON DELETE RESTRICT` | Batch reference |
+| `stock_transfer_id` | `BIGINT` | `NULL REFERENCES transfer_requests(id) ON DELETE RESTRICT` | Linked completed transfer |
+| `sale_id` | `BIGINT` | `NULL REFERENCES sales(id) ON DELETE RESTRICT` | Linked salvage sale |
+| `event_type` | `VARCHAR(40)` | `NOT NULL DEFAULT 'TRANSFER_REDISTRIBUTION'` | Event classification |
+| `eligible_saved_quantity` | `NUMERIC(12,3)` | `NOT NULL CHECK (eligible_saved_quantity >= 0)` | Verified saved quantity in original unit |
+| `quantity_unit` | `VARCHAR(20)` | `NOT NULL` | Unit of measure |
+| `normalized_weight_kg` | `NUMERIC(12,3)` | `NOT NULL CHECK (normalized_weight_kg >= 0)` | Metric weight in kilograms |
+| `applicable_factor_id` | `BIGINT` | `NULL REFERENCES emission_factors(id) ON DELETE RESTRICT` | Resolved emission factor |
+| `factor_selection_tier` | `VARCHAR(32)` | `NOT NULL DEFAULT 'CATEGORY_FALLBACK'` | Resolution tier |
+| `estimated_avoided_emissions` | `NUMERIC(12,4)` | `NOT NULL DEFAULT 0.0000` | Gross avoided waste emissions (kg CO2e) |
+| `additional_transport_emissions`| `NUMERIC(12,4)` | `NOT NULL DEFAULT 0.0000` | Attributable road freight emissions (kg CO2e)|
+| `net_estimated_impact` | `NUMERIC(12,4)` | `NOT NULL DEFAULT 0.0000` | Net environmental benefit (kg CO2e) |
+| `confidence_level` | `VARCHAR(32)` | `NOT NULL DEFAULT 'MEDIUM_ESTIMATE'` | Confidence classification |
+| `event_status` | `VARCHAR(32)` | `NOT NULL DEFAULT 'FINALIZED'` | Status (FINALIZED, PENDING_REVIEW, INELIGIBLE, REVERSED) |
+| `evidence_summary` | `TEXT` | `NULL` | Objective baseline evidence & audit notes |
+| `methodology_version` | `VARCHAR(32)` | `NOT NULL DEFAULT 'v1.0.0-fao-warm'` | Methodology version |
+| `reward_points_awarded` | `BIGINT` | `NOT NULL DEFAULT 0` | Total internal sustainability points |
+| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT NOW()` | Creation timestamp |
+| `finalized_at` | `TIMESTAMPTZ` | `NULL` | Finalization timestamp |
+
+#### Table: `sustainability_ledger`
+Immutable double-entry points and carbon attribution ledger for participating sister stores.
+
+| Column | Type | Constraints / Defaults | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `BIGINT` | `PRIMARY KEY GENERATED ALWAYS AS IDENTITY` | Surrogate primary key |
+| `organization_id` | `BIGINT` | `NOT NULL REFERENCES organizations(id) ON DELETE RESTRICT` | Tenant organization |
+| `shop_id` | `BIGINT` | `NOT NULL REFERENCES shops(id) ON DELETE RESTRICT` | Beneficiary store |
+| `sustainability_event_id` | `BIGINT` | `NOT NULL REFERENCES sustainability_events(id) ON DELETE RESTRICT` | Parent event |
+| `transaction_type` | `VARCHAR(40)` | `NOT NULL` | ALLOCATION_SOURCE, ALLOCATION_RECIPIENT, REVERSAL |
+| `points_delta` | `BIGINT` | `NOT NULL` | Signed points awarded (+/-) |
+| `attributed_impact_kg_co2e` | `NUMERIC(12,4)` | `NOT NULL` | Signed net impact share (+/- kg CO2e) |
+| `reward_rule_version` | `VARCHAR(32)` | `NOT NULL DEFAULT 'v1.0.0-10pts-per-kg'` | Reward conversion rule version |
+| `idempotency_key` | `VARCHAR(120)` | `NOT NULL UNIQUE` | Deterministic key preventing duplicate attribution |
+| `notes` | `TEXT` | `NULL` | Transaction reason / audit remarks |
+| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT NOW()` | Posting timestamp |
+
+---
+
 ## 3. Migration & Data Integrity Strategy
 
 1. **Alembic / Flask-Migrate Workflow:**
